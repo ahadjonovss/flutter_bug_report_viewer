@@ -555,6 +555,83 @@
           });
       })
       .then(function () {
+        // ===== A browser that cannot inflate =====
+        //
+        // Two different browsers land here and the reader must not be
+        // able to tell which. One has no DecompressionStream; the other
+        // has one that has never heard of "deflate-raw", which is every
+        // Chrome between 80 and 102. Testing only the first leaves the
+        // second showing a bare TypeError.
+        t.suite("a browser that cannot inflate");
+
+        var real = root.DecompressionStream;
+        var advice = /Chrome 103[\s\S]*\.json or \.txt/;
+
+        function broken(how) {
+          if (how === "absent") delete root.DecompressionStream;
+          else root.DecompressionStream = function () { throw new TypeError("Unsupported format"); };
+        }
+
+        function mended() {
+          root.DecompressionStream = real;
+        }
+
+        function refusedWith(promise, what) {
+          return promise.then(function () {
+            t.record(what, "expected it to be rejected, but it resolved");
+          }, function (error) {
+            t.record(what, advice.test(error.message) ? null :
+              "expected the advice about older browsers, got " + show(error.message));
+          });
+        }
+
+        broken("absent");
+
+        return refusedWith(
+          P.open([{ name: "ordinary.zip", bytes: loaded["ordinary.zip"] }]),
+          "a browser with no DecompressionStream is told which versions can, and what to ask for"
+        ).then(function () {
+          // The advice is only worth giving if it is true. Neither of the
+          // forms it names goes near DecompressionStream, and this is
+          // what keeps that so.
+          return P.open([{ name: "ordinary.json", bytes: loaded["ordinary.json"] }]);
+        }).then(function (bundle) {
+          t.eq(bundle.entries.length, 5, "and the .json it recommends opens on that same browser");
+
+          return P.open([{ name: "ordinary.txt", bytes: loaded["ordinary.txt"] }]);
+        }).then(function (bundle) {
+          t.eq(bundle.entries.length, 5, "and so does the .txt");
+
+          // A zip of stored entries never inflates anything, so it opens
+          // even here.
+          var stored = makeZip([{ name: "report.json", text: JSON.stringify({
+            report: { generated_at: "2026-08-26T07:19:11.214967Z", entry_count: 1, truncated: false },
+            entries: [{ time: "2026-08-26T07:19:11.214967Z", level: "info", message: "signed in" }]
+          }) }]);
+
+          return P.open([{ name: "stored.zip", bytes: stored }]);
+        }).then(function (bundle) {
+          t.eq(bundle.entries.length, 1, "and an uncompressed zip needs no inflating at all");
+
+          // The other browser: it has the constructor, and the
+          // constructor throws.
+          broken("throws");
+
+          return refusedWith(
+            P.open([{ name: "ordinary.zip", bytes: loaded["ordinary.zip"] }]),
+            "a browser whose DecompressionStream rejects deflate-raw gets the same sentence, not a TypeError"
+          );
+        }).then(function () {
+          mended();
+          return P.open([{ name: "ordinary.zip", bytes: loaded["ordinary.zip"] }]);
+        }).then(function (bundle) {
+          t.eq(bundle.entries.length, 5, "and a browser that can inflate is unaffected");
+        }, function (error) {
+          mended();
+          throw error;
+        });
+      })
+      .then(function () {
         // ===== A zip that came from somewhere else =====
         t.suite("a zip from elsewhere");
 

@@ -59,6 +59,13 @@ izoh emas, mahsulotning o'zi.
 - **Hech narsa serverga ketmaydi.** Bu va'da emas, majburlangan xossa:
   sahifada `Content-Security-Policy` meta tegi `connect-src 'none'` bilan —
   brauzerning o'zi har qanday fetch/XHR/WebSocket/beacon'ni rad etadi.
+  Bir xil origin'ga so'rov ham `default-src 'none'` bilan to'siladi.
+  > **Tekshirganda:** `WebSocket` konstruktori sinxron xato tashlamaydi va
+  > `sendBeacon` `true` qaytaradi — u faqat "navbatga qo'yildi" deydi. Ya'ni
+  > qaytgan qiymatga qarab xulosa chiqarib bo'lmaydi. **Hakam — konsol:**
+  > buzilish (violation) yozuvi bor-yo'qligiga qaraladi, qaytgan qiymatga emas.
+  > `frame-ancestors` meta tegda ishlamaydi va e'tiborsiz qoldiriladi —
+  > shuning uchun u bu yerda yo'q, javob sarlavhasida bo'lishi kerak.
 - Offline ishlaydi. Bitta faylni saqlab, internetsiz ochish mumkin.
 - CDN yo'q, shrift yuklanmaydi, analitika yo'q, bog'liqlik yo'q.
 - Yengil: bitta faylda ~69KB, gzip bilan ~20KB. Ma'lumotnomadagi 50KB
@@ -213,8 +220,21 @@ Ikkala qiymat ham to'g'ri. Ziplarda `report.json` va `logs.txt` bir xil
 ### 5.9 Brauzer talabi
 
 `DecompressionStream('deflate-raw')` — Chrome 103+, Safari 16.4+, Firefox 113+.
-Undan eskisida zip ochilmaydi va sayt buni aniq aytadi (`.json` yoki `.txt`
-shaklini so'rashni taklif qiladi).
+
+**Ikki xil eski brauzer bor va faqat bittasi ko'rinib turadi.** Birinchisida
+`DecompressionStream` umuman yo'q. Ikkinchisida bor, lekin `deflate-raw` ni
+bilmaydi — Chrome `gzip` va `deflate` ni 103 dan ancha oldin olib yurgan, ya'ni
+Chrome 80–102 shu toifaga kiradi va konstruktor `TypeError` tashlaydi.
+
+Shuning uchun `typeof` tekshiruvi yetarli emas: konstruktor `try/catch` ichida
+chaqiriladi va **ikkala yo'l ham bitta xabarga olib boradi**. Aks holda
+ikkinchi brauzerdagi foydalanuvchi tayyorlangan jumla o'rniga xom `TypeError`
+ko'radi.
+
+Xabar `.json` yoki `.txt` so'rashni taklif qiladi — va bu **haqiqatan
+ishlaydigan** maslahat bo'lishi shart: ikkala yo'l ham `DecompressionStream`
+ga umuman tegmaydi, va testda shu tekshiriladi. Siqilmagan (`stored`) zip ham
+ochilaveradi.
 
 ## 6. Kelajakdagi (hozircha emas)
 

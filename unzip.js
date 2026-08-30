@@ -148,17 +148,34 @@
     return bytes.subarray(from, from + file.compressed);
   }
 
+  // Said in one place, because there are two ways to arrive at it and the
+  // reader should not be able to tell which of them happened.
+  //
+  // The advice at the end has to stay true: neither the json nor the text
+  // path goes anywhere near DecompressionStream, so a reader sent back to
+  // ask for one of those forms gets a form that actually opens.
+  var NO_INFLATE =
+    "This browser cannot decompress a zip. Chrome 103, Safari 16.4, Firefox 113 or newer can — " +
+    "or ask for the .json or .txt form of the bundle instead.";
+
   function inflate(payload) {
-    if (typeof DecompressionStream === "undefined") {
-      return Promise.reject(new Error(
-        "This browser cannot decompress a zip. Chrome 103, Safari 16.4, Firefox 113 or newer can — " +
-        "or ask for the .json or .txt form of the bundle instead."
-      ));
+    var stream;
+
+    // Two browsers fail here and only one of them is obvious.
+    //
+    // The first has no DecompressionStream at all. The second has one and
+    // has never heard of "deflate-raw": Chrome carried gzip and deflate
+    // for twenty-odd versions before raw landed in 103, and on those the
+    // constructor throws. Testing only for the global lets that second
+    // browser through the guard and hands the reader a bare TypeError in
+    // place of the sentence written for exactly this moment.
+    try {
+      if (typeof DecompressionStream === "undefined") throw new Error("no DecompressionStream");
+      stream = new DecompressionStream("deflate-raw");
+    } catch (e) {
+      return Promise.reject(new Error(NO_INFLATE));
     }
 
-    // deflate-raw, not deflate: a zip stores the DEFLATE stream without the
-    // zlib header that "deflate" expects.
-    var stream = new DecompressionStream("deflate-raw");
     var writer = stream.writable.getWriter();
 
     // Both ends of the stream reject when the payload is not valid
