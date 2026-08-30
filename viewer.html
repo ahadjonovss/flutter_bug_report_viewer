@@ -98,7 +98,11 @@ body {
   font-size: 13px;
   font-weight: 600;
   letter-spacing: -.01em;
+  color: var(--text);
+  text-decoration: none;
+  transition: color var(--t);
 }
+.brand:hover { color: var(--accent); }
 .brand span { color: var(--dim); font-weight: 400; }
 
 /* The claim the whole project rests on, stated where it cannot be
@@ -117,11 +121,14 @@ body {
   background: #4E9A6A;
   flex: none;
 }
-.vow code {
+.vow__code {
   font-family: var(--mono);
   font-size: 11px;
   color: var(--faint);
 }
+/* The dash belongs to the code, so hiding the code on a narrow screen does
+   not leave one dangling. */
+.vow__code::before { content: "— "; }
 
 main {
   flex: 1;
@@ -130,71 +137,215 @@ main {
   flex-direction: column;
 }
 
-/* ===== Nothing open yet ===== */
+/* ===== Nothing open yet =====
+
+   This is the first thing a visitor sees and often the only thing: somebody
+   lands here from a ticket holding a zip and no idea what wrote it. So the
+   page has to say what it is, what made the file, and why it can be trusted
+   with it — before anything is dropped. */
 
 .drop {
   flex: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 14px;
-  padding: 40px 24px;
-  text-align: center;
+  overflow: auto;
+  padding: 44px 24px 72px;
 }
 .drop.is-over .drop__box {
   border-color: var(--accent);
-  background: rgba(91, 157, 217, .06);
+  background: rgba(91, 157, 217, .07);
 }
 
-.drop__box {
+.sheet {
+  max-width: 620px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 26px;
+}
+
+/* ===== The hero ===== */
+
+.hero { text-align: center; }
+
+/* The strip motif: the one thing here a text editor cannot do. Drawn rather
+   than described, so the page demonstrates itself before it is used. */
+.glyph {
   width: 100%;
-  max-width: 520px;
-  padding: 44px 32px;
+  max-width: 340px;
+  height: auto;
+  margin-bottom: 22px;
+}
+.glyph__tick--info rect { fill: var(--info); }
+.glyph__tick--warning rect { fill: var(--warning); }
+.glyph__tick--error rect { fill: var(--error); }
+.glyph__rule { stroke: var(--border); stroke-width: 1; }
+.glyph__gap {
+  stroke: var(--faint);
+  stroke-width: 1;
+  stroke-dasharray: 2 3;
+}
+.glyph__label {
+  fill: var(--faint);
+  font-family: var(--mono);
+  font-size: 9px;
+}
+
+.hero__title {
+  font-size: 27px;
+  font-weight: 600;
+  letter-spacing: -.02em;
+  margin: 0 0 10px;
+  line-height: 1.2;
+}
+.hero__lead {
+  margin: 0;
+  font-size: 14.5px;
+  line-height: 1.6;
+  color: var(--dim);
+}
+.hero__lead code { font-family: var(--mono); font-size: 13px; color: var(--text); }
+
+/* ===== The target ===== */
+
+.drop__box {
+  padding: 30px 28px;
   border: 1.5px dashed var(--border);
   border-radius: 14px;
   background: var(--surface);
+  text-align: center;
   transition: border-color var(--t), background var(--t);
 }
-.drop__title { font-size: 17px; font-weight: 600; margin: 0 0 6px; }
-.drop__title code { font-family: var(--mono); font-size: 15px; color: var(--accent); }
+.drop__title { font-size: 16px; font-weight: 600; margin: 0 0 5px; }
 .drop__note { margin: 0; font-size: 13px; color: var(--dim); }
+.drop__note code { font-family: var(--mono); color: var(--accent); }
 
 .drop__pick {
   display: inline-block;
-  margin-top: 18px;
+  margin-top: 16px;
   padding: 9px 18px;
   border: 1px solid var(--border);
   border-radius: 8px;
   background: var(--raised);
   color: var(--text);
-  font: inherit;
   font-size: 13px;
   cursor: pointer;
-  transition: border-color var(--t), background var(--t);
+  transition: border-color var(--t), color var(--t);
 }
-.drop__pick:hover { border-color: var(--accent); }
-
-.about {
-  max-width: 520px;
-  font-size: 13px;
-  line-height: 1.65;
-  color: var(--dim);
-}
-.about p { margin: 0 0 10px; }
-.about a { color: var(--accent); }
-.about code { font-family: var(--mono); font-size: 12px; color: var(--text); }
+.drop__pick:hover { border-color: var(--accent); color: var(--accent); }
 
 .fail {
-  max-width: 520px;
+  margin: 0;
   padding: 12px 14px;
   border: 1px solid var(--error);
   border-radius: 8px;
   background: rgba(229, 84, 75, .08);
   color: var(--error);
   font-size: 13px;
-  text-align: left;
 }
+
+/* ===== What it promises ===== */
+
+.traits {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 1px;
+  background: var(--border);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+}
+.trait {
+  background: var(--surface);
+  padding: 15px 18px;
+}
+.trait__name {
+  display: block;
+  font-family: var(--mono);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 4px;
+}
+.trait__note {
+  display: block;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--dim);
+}
+.trait__note code { font-family: var(--mono); font-size: 12px; color: var(--accent); }
+
+/* ===== Where the file came from ===== */
+
+.origin,
+.give--full {
+  border-left: 2px solid var(--border);
+  padding: 2px 0 2px 18px;
+}
+.origin__head,
+.give__head {
+  font-size: 13px;
+  font-weight: 600;
+  margin: 0 0 8px;
+  color: var(--text);
+}
+.origin__body,
+.give__body {
+  margin: 0 0 10px;
+  font-size: 13px;
+  line-height: 1.65;
+  color: var(--dim);
+}
+.origin__body code { font-family: var(--mono); font-size: 12px; }
+.origin__body strong { color: var(--text); font-weight: 600; }
+
+.origin__links {
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  font-size: 13px;
+}
+.origin__links a { color: var(--accent); text-decoration: none; }
+.origin__links a:hover { text-decoration: underline; }
+
+/* ===== The ask =====
+
+   Placed where somebody is reading and has attention to spare, and nowhere
+   else. It never appears over a log, never moves, and never suggests that
+   anything here depends on it — because nothing does. The honest version of
+   this ask is also the one that supports the page's other claim: there is no
+   telemetry because there is no company, and no company is why there is
+   nobody to bill. */
+
+.give--full { border-left-color: var(--warning); }
+
+.give__link {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 15px;
+  border: 1px solid var(--warning);
+  border-radius: 8px;
+  color: var(--warning);
+  font-size: 13px;
+  text-decoration: none;
+  transition: background var(--t);
+}
+.give__link:hover { background: rgba(217, 164, 65, .1); }
+
+.give--small {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  color: var(--dim);
+  text-decoration: none;
+  padding: 4px 8px;
+  border-radius: 6px;
+  transition: color var(--t), background var(--t);
+}
+.give--small:hover { color: var(--warning); background: rgba(217, 164, 65, .08); }
 
 /* ===== The density strip ===== */
 
@@ -553,48 +704,163 @@ mark { background: var(--mark); color: #14171C; border-radius: 2px; }
   .split { flex-direction: column; }
   .side { width: auto; border-left: none; border-top: 1px solid var(--border); max-height: 45vh; }
   .search { width: 100%; }
-  .vow span { display: none; }
+
+  .top { gap: 10px; padding: 10px 12px; }
+  .brand { white-space: nowrap; }
+  .vow__code { display: none; }
+  .hero__title { font-size: 22px; }
+  .drop { padding: 28px 16px 56px; }
+}
+
+/* Narrower still: the promise is stated in full a screen below, so the
+   header keeps only the light that says it is being kept. */
+@media (max-width: 560px) {
+  .vow__text { display: none; }
 }
 </style>
 </head>
 <body>
 
 <header class="top">
-  <div class="brand">flutter_bug_report <span>· viewer</span></div>
-  <div class="vow">
+  <a class="brand" href="https://pub.dev/packages/flutter_bug_report" target="_blank" rel="noopener noreferrer">
+    flutter_bug_report <span>· viewer</span>
+  </a>
+
+  <div class="vow" title="This page is forbidden by its own Content-Security-Policy from making any network request.">
     <span class="vow__dot" aria-hidden="true"></span>
-    <span>Nothing leaves your machine —</span>
-    <code>connect-src 'none'</code>
+    <span class="vow__text">Nothing leaves your machine</span>
+    <code class="vow__code">connect-src 'none'</code>
   </div>
+
+  <!-- Small, still, and out of the way. Someone reading an error log at two
+       in the morning is debugging, not shopping. -->
+  <a class="give give--small" href="https://tirikchilik.uz/ahadjonovss" target="_blank" rel="noopener noreferrer" title="Support the person who maintains this">
+    <svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true" focusable="false">
+      <path d="M8 14S2.5 10.5 2.5 6.5A3 3 0 0 1 8 4.8 3 3 0 0 1 13.5 6.5C13.5 10.5 8 14 8 14Z"
+            fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/>
+    </svg>
+    Support
+  </a>
 </header>
 
 <main>
   <!-- ===== Nothing open ===== -->
   <section class="drop" id="drop">
-    <div class="drop__box">
-      <p class="drop__title">Drop a bundle — <code>.zip</code>, <code>.json</code> or <code>.txt</code></p>
-      <p class="drop__note">Or paste the log. Or pick the file.</p>
-      <label class="drop__pick">
-        Choose a file
-        <input id="picker" type="file" multiple accept=".zip,.json,.txt,.log,.png" hidden />
-      </label>
-    </div>
+    <div class="sheet">
 
-    <p class="fail is-hidden" id="fail"></p>
+      <div class="hero">
+        <!-- The strip, which is the one thing this viewer does that a text
+             editor cannot: a session drawn on a time axis, so the half
+             minute where nothing happened is visible as a hole. Showing it
+             here means the page explains itself before anything is opened. -->
+        <svg class="glyph" viewBox="0 0 340 64" role="img" aria-labelledby="glyphTitle">
+          <title id="glyphTitle">A session: steady polling, then half a minute of silence, then a burst of errors</title>
+          <g class="glyph__tick glyph__tick--info">
+            <rect x="10" y="34" width="3" height="14" rx="1" />
+            <rect x="26" y="34" width="3" height="14" rx="1" />
+            <rect x="42" y="34" width="3" height="14" rx="1" />
+            <rect x="58" y="34" width="3" height="14" rx="1" />
+            <rect x="74" y="34" width="3" height="14" rx="1" />
+            <rect x="90" y="34" width="3" height="14" rx="1" />
+            <rect x="214" y="34" width="3" height="14" rx="1" />
+          </g>
+          <g class="glyph__tick glyph__tick--warning">
+            <rect x="226" y="26" width="3" height="22" rx="1" />
+          </g>
+          <g class="glyph__tick glyph__tick--error">
+            <rect x="240" y="16" width="3" height="32" rx="1" />
+            <rect x="248" y="16" width="3" height="32" rx="1" />
+            <rect x="256" y="16" width="3" height="32" rx="1" />
+            <rect x="264" y="16" width="3" height="32" rx="1" />
+            <rect x="272" y="16" width="3" height="32" rx="1" />
+            <rect x="290" y="16" width="3" height="32" rx="1" />
+          </g>
+          <path class="glyph__rule" d="M8 54 H332" />
+          <path class="glyph__gap" d="M97 54 H208" />
+          <text class="glyph__label" x="152" y="50" text-anchor="middle">31.5s</text>
+        </svg>
 
-    <div class="about">
-      <p>
-        A bundle is what <a href="https://pub.dev/packages/flutter_bug_report" rel="noopener">flutter_bug_report</a>
-        attaches to a bug report: the app's log, redacted and bounded, with the
-        report's own description and a screenshot beside it.
-      </p>
-      <p>
-        It is read here in the page and never uploaded — there is no server to
-        upload it to. The bundle was redacted on the device before it was
-        written, but it still carries real data, and a
-        <code>screenshot.png</code> cannot be redacted at all. Save this page and
-        it works with no network at all.
-      </p>
+        <h1 class="hero__title">Somebody has to read it</h1>
+        <p class="hero__lead">
+          A bug report arrives as a zip. Reading it should not mean unzipping the
+          thing and scrolling <code>logs.txt</code> in a text editor.
+        </p>
+      </div>
+
+      <div class="drop__box">
+        <p class="drop__title">Drop a bundle</p>
+        <p class="drop__note"><code>.zip</code>, <code>.json</code> or <code>.txt</code> — or paste the log, or pick the file.</p>
+        <label class="drop__pick">
+          Choose a file
+          <input id="picker" type="file" multiple accept=".zip,.json,.txt,.log,.png" hidden />
+        </label>
+      </div>
+
+      <p class="fail is-hidden" id="fail"></p>
+
+      <ul class="traits">
+        <li class="trait">
+          <span class="trait__name">It stays here</span>
+          <span class="trait__note">
+            Parsed in the page. The <code>connect-src 'none'</code> policy means the
+            browser itself refuses every request this page could try to make — so it
+            cannot send your log anywhere, whatever its code says.
+          </span>
+        </li>
+        <li class="trait">
+          <span class="trait__name">Nothing is kept</span>
+          <span class="trait__note">
+            No history, no storage, no account. A bundle is redacted before it is
+            written, but it still holds real data — and a screenshot cannot be
+            redacted at all. Close the tab and it is gone.
+          </span>
+        </li>
+        <li class="trait">
+          <span class="trait__name">It works offline</span>
+          <span class="trait__note">
+            Save the page and it runs with no network at all, which is the right way
+            to open a bundle you would rather not put on a connected machine.
+          </span>
+        </li>
+      </ul>
+
+      <section class="origin">
+        <h2 class="origin__head">The other half of a package</h2>
+        <p class="origin__body">
+          These bundles are built by <strong>flutter_bug_report</strong> — a Flutter
+          package that captures an app's logs and crashes, redacts secrets on the
+          device, and writes a bounded <code>.txt</code>, <code>.json</code> or
+          <code>.zip</code>. No vendor, no SDK, no network code: the app decides
+          where the file goes. This reads what it produces.
+        </p>
+        <p class="origin__links">
+          <a href="https://pub.dev/packages/flutter_bug_report" target="_blank" rel="noopener noreferrer">pub.dev</a>
+          <a href="https://github.com/ahadjonovss/flutter_bug_report" target="_blank" rel="noopener noreferrer">the package on GitHub</a>
+          <a href="https://github.com/ahadjonovss/flutter_bug_report_viewer" target="_blank" rel="noopener noreferrer">this viewer on GitHub</a>
+        </p>
+      </section>
+
+      <section class="give give--full">
+        <h2 class="give__head">There is nobody to bill you</h2>
+        <p class="give__body">
+          The package and this viewer are written and kept up by one person. That is
+          the same reason there is no vendor in the loop, no account to make and
+          nothing measuring you — there is no company here to want any of it.
+        </p>
+        <p class="give__body">
+          If this saved you an afternoon, you can put something toward the work.
+          It is entirely optional, nothing here is gated, and nothing changes if you
+          would rather not.
+        </p>
+        <a class="give__link" href="https://tirikchilik.uz/ahadjonovss" target="_blank" rel="noopener noreferrer">
+          <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" focusable="false">
+            <path d="M8 14S2.5 10.5 2.5 6.5A3 3 0 0 1 8 4.8 3 3 0 0 1 13.5 6.5C13.5 10.5 8 14 8 14Z"
+                  fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/>
+          </svg>
+          Support the work
+        </a>
+      </section>
+
     </div>
   </section>
 

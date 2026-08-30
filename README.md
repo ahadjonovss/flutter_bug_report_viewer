@@ -76,6 +76,15 @@ written through `debugPrint` can span several unindented lines, so where a
 message ends and its error, extra and stack begin is inferred. The `.zip` and
 `.json` forms are exact.
 
+## Supporting it
+
+The package and this viewer are written and maintained by one person. That is
+the same reason there is no vendor in the loop, no account to make and nothing
+measuring you — there is no company here to want any of it.
+
+If it saved you an afternoon: **[tirikchilik.uz/ahadjonovss](https://tirikchilik.uz/ahadjonovss)**.
+Optional, and nothing here is gated.
+
 ## Licence
 
 MIT © [Samandar Ahadjonov](https://github.com/ahadjonovss)

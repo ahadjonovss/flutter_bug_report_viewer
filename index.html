@@ -37,41 +37,145 @@
 <body>
 
 <header class="top">
-  <div class="brand">flutter_bug_report <span>· viewer</span></div>
-  <div class="vow">
+  <a class="brand" href="https://pub.dev/packages/flutter_bug_report" target="_blank" rel="noopener noreferrer">
+    flutter_bug_report <span>· viewer</span>
+  </a>
+
+  <div class="vow" title="This page is forbidden by its own Content-Security-Policy from making any network request.">
     <span class="vow__dot" aria-hidden="true"></span>
-    <span>Nothing leaves your machine —</span>
-    <code>connect-src 'none'</code>
+    <span class="vow__text">Nothing leaves your machine</span>
+    <code class="vow__code">connect-src 'none'</code>
   </div>
+
+  <!-- Small, still, and out of the way. Someone reading an error log at two
+       in the morning is debugging, not shopping. -->
+  <a class="give give--small" href="https://tirikchilik.uz/ahadjonovss" target="_blank" rel="noopener noreferrer" title="Support the person who maintains this">
+    <svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true" focusable="false">
+      <path d="M8 14S2.5 10.5 2.5 6.5A3 3 0 0 1 8 4.8 3 3 0 0 1 13.5 6.5C13.5 10.5 8 14 8 14Z"
+            fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/>
+    </svg>
+    Support
+  </a>
 </header>
 
 <main>
   <!-- ===== Nothing open ===== -->
   <section class="drop" id="drop">
-    <div class="drop__box">
-      <p class="drop__title">Drop a bundle — <code>.zip</code>, <code>.json</code> or <code>.txt</code></p>
-      <p class="drop__note">Or paste the log. Or pick the file.</p>
-      <label class="drop__pick">
-        Choose a file
-        <input id="picker" type="file" multiple accept=".zip,.json,.txt,.log,.png" hidden />
-      </label>
-    </div>
+    <div class="sheet">
 
-    <p class="fail is-hidden" id="fail"></p>
+      <div class="hero">
+        <!-- The strip, which is the one thing this viewer does that a text
+             editor cannot: a session drawn on a time axis, so the half
+             minute where nothing happened is visible as a hole. Showing it
+             here means the page explains itself before anything is opened. -->
+        <svg class="glyph" viewBox="0 0 340 64" role="img" aria-labelledby="glyphTitle">
+          <title id="glyphTitle">A session: steady polling, then half a minute of silence, then a burst of errors</title>
+          <g class="glyph__tick glyph__tick--info">
+            <rect x="10" y="34" width="3" height="14" rx="1" />
+            <rect x="26" y="34" width="3" height="14" rx="1" />
+            <rect x="42" y="34" width="3" height="14" rx="1" />
+            <rect x="58" y="34" width="3" height="14" rx="1" />
+            <rect x="74" y="34" width="3" height="14" rx="1" />
+            <rect x="90" y="34" width="3" height="14" rx="1" />
+            <rect x="214" y="34" width="3" height="14" rx="1" />
+          </g>
+          <g class="glyph__tick glyph__tick--warning">
+            <rect x="226" y="26" width="3" height="22" rx="1" />
+          </g>
+          <g class="glyph__tick glyph__tick--error">
+            <rect x="240" y="16" width="3" height="32" rx="1" />
+            <rect x="248" y="16" width="3" height="32" rx="1" />
+            <rect x="256" y="16" width="3" height="32" rx="1" />
+            <rect x="264" y="16" width="3" height="32" rx="1" />
+            <rect x="272" y="16" width="3" height="32" rx="1" />
+            <rect x="290" y="16" width="3" height="32" rx="1" />
+          </g>
+          <path class="glyph__rule" d="M8 54 H332" />
+          <path class="glyph__gap" d="M97 54 H208" />
+          <text class="glyph__label" x="152" y="50" text-anchor="middle">31.5s</text>
+        </svg>
 
-    <div class="about">
-      <p>
-        A bundle is what <a href="https://pub.dev/packages/flutter_bug_report" rel="noopener">flutter_bug_report</a>
-        attaches to a bug report: the app's log, redacted and bounded, with the
-        report's own description and a screenshot beside it.
-      </p>
-      <p>
-        It is read here in the page and never uploaded — there is no server to
-        upload it to. The bundle was redacted on the device before it was
-        written, but it still carries real data, and a
-        <code>screenshot.png</code> cannot be redacted at all. Save this page and
-        it works with no network at all.
-      </p>
+        <h1 class="hero__title">Somebody has to read it</h1>
+        <p class="hero__lead">
+          A bug report arrives as a zip. Reading it should not mean unzipping the
+          thing and scrolling <code>logs.txt</code> in a text editor.
+        </p>
+      </div>
+
+      <div class="drop__box">
+        <p class="drop__title">Drop a bundle</p>
+        <p class="drop__note"><code>.zip</code>, <code>.json</code> or <code>.txt</code> — or paste the log, or pick the file.</p>
+        <label class="drop__pick">
+          Choose a file
+          <input id="picker" type="file" multiple accept=".zip,.json,.txt,.log,.png" hidden />
+        </label>
+      </div>
+
+      <p class="fail is-hidden" id="fail"></p>
+
+      <ul class="traits">
+        <li class="trait">
+          <span class="trait__name">It stays here</span>
+          <span class="trait__note">
+            Parsed in the page. The <code>connect-src 'none'</code> policy means the
+            browser itself refuses every request this page could try to make — so it
+            cannot send your log anywhere, whatever its code says.
+          </span>
+        </li>
+        <li class="trait">
+          <span class="trait__name">Nothing is kept</span>
+          <span class="trait__note">
+            No history, no storage, no account. A bundle is redacted before it is
+            written, but it still holds real data — and a screenshot cannot be
+            redacted at all. Close the tab and it is gone.
+          </span>
+        </li>
+        <li class="trait">
+          <span class="trait__name">It works offline</span>
+          <span class="trait__note">
+            Save the page and it runs with no network at all, which is the right way
+            to open a bundle you would rather not put on a connected machine.
+          </span>
+        </li>
+      </ul>
+
+      <section class="origin">
+        <h2 class="origin__head">The other half of a package</h2>
+        <p class="origin__body">
+          These bundles are built by <strong>flutter_bug_report</strong> — a Flutter
+          package that captures an app's logs and crashes, redacts secrets on the
+          device, and writes a bounded <code>.txt</code>, <code>.json</code> or
+          <code>.zip</code>. No vendor, no SDK, no network code: the app decides
+          where the file goes. This reads what it produces.
+        </p>
+        <p class="origin__links">
+          <a href="https://pub.dev/packages/flutter_bug_report" target="_blank" rel="noopener noreferrer">pub.dev</a>
+          <a href="https://github.com/ahadjonovss/flutter_bug_report" target="_blank" rel="noopener noreferrer">the package on GitHub</a>
+          <a href="https://github.com/ahadjonovss/flutter_bug_report_viewer" target="_blank" rel="noopener noreferrer">this viewer on GitHub</a>
+        </p>
+      </section>
+
+      <section class="give give--full">
+        <h2 class="give__head">There is nobody to bill you</h2>
+        <p class="give__body">
+          The package and this viewer are written and kept up by one person. That is
+          the same reason there is no vendor in the loop, no account to make and
+          nothing measuring you — there is no company here to want any of it.
+        </p>
+        <p class="give__body">
+          If this saved you an afternoon, you can put something toward the work.
+          It is entirely optional, nothing here is gated, and nothing changes if you
+          would rather not.
+        </p>
+        <a class="give__link" href="https://tirikchilik.uz/ahadjonovss" target="_blank" rel="noopener noreferrer">
+          <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" focusable="false">
+            <path d="M8 14S2.5 10.5 2.5 6.5A3 3 0 0 1 8 4.8 3 3 0 0 1 13.5 6.5C13.5 10.5 8 14 8 14Z"
+                  fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/>
+          </svg>
+          Support the work
+        </a>
+      </section>
+
     </div>
   </section>
 
