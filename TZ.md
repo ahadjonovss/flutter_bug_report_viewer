@@ -61,7 +61,11 @@ izoh emas, mahsulotning o'zi.
   brauzerning o'zi har qanday fetch/XHR/WebSocket/beacon'ni rad etadi.
 - Offline ishlaydi. Bitta faylni saqlab, internetsiz ochish mumkin.
 - CDN yo'q, shrift yuklanmaydi, analitika yo'q, bog'liqlik yo'q.
-- Yengil: bitta faylda < 50KB.
+- Yengil: bitta faylda ~69KB, gzip bilan ~20KB. Ma'lumotnomadagi 50KB
+  QR generator uchun edi; bu undan kattaroq dastur. **Izohlar qisqartirilmaydi
+  va minifikatsiya qilinmaydi** — "hammasi ko'rib chiqiladigan bo'lsin" degan
+  talab shundan iborat, va o'qib bo'lmaydigan 40KB o'qiladigan 69KB dan
+  yomonroq.
 - Dark mode — loglarni kechasi o'qishadi.
 - Mobil + desktop responsive.
 - Klaviatura bilan to'liq foydalanish mumkin.

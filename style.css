@@ -1,0 +1,522 @@
+/* ===================================================================
+   flutter_bug_report log viewer — "Diagnostika"
+
+   A log is not text to be read, it is data to be diagnosed. So colour
+   means something here and is never decoration: a level is the same
+   colour in the density strip, in the row's edge and in its chip, and
+   nothing else in the page competes with those four hues.
+   =================================================================== */
+
+:root {
+  --bg: #0E1116;
+  --surface: #171B22;
+  --raised: #1D222B;
+  --border: #252B35;
+  --text: #DCE1E8;
+  --dim: #707A88;
+  --faint: #4A5361;
+
+  --debug: #5A6472;
+  --info: #5B9DD9;
+  --warning: #D9A441;
+  --error: #E5544B;
+
+  --accent: #5B9DD9;
+  --bar: #3A424F;          /* a redaction bar: present, unreadable */
+  --mark: #D9A441;
+
+  --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --t: .15s ease;
+}
+
+* { box-sizing: border-box; }
+
+html, body { height: 100%; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font: 14px/1.5 var(--sans);
+  -webkit-font-smoothing: antialiased;
+  display: flex;
+  flex-direction: column;
+}
+
+.is-hidden { display: none !important; }
+
+/* ===== The strip along the top of the page ===== */
+
+.top {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+  flex: none;
+}
+
+.brand {
+  font-family: var(--mono);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: -.01em;
+}
+.brand span { color: var(--dim); font-weight: 400; }
+
+/* The claim the whole project rests on, stated where it cannot be
+   missed rather than in a footer. */
+.vow {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 12px;
+  color: var(--dim);
+}
+.vow__dot {
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: #4E9A6A;
+  flex: none;
+}
+.vow code {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--faint);
+}
+
+main {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ===== Nothing open yet ===== */
+
+.drop {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  padding: 40px 24px;
+  text-align: center;
+}
+.drop.is-over .drop__box {
+  border-color: var(--accent);
+  background: rgba(91, 157, 217, .06);
+}
+
+.drop__box {
+  width: 100%;
+  max-width: 520px;
+  padding: 44px 32px;
+  border: 1.5px dashed var(--border);
+  border-radius: 14px;
+  background: var(--surface);
+  transition: border-color var(--t), background var(--t);
+}
+.drop__title { font-size: 17px; font-weight: 600; margin: 0 0 6px; }
+.drop__title code { font-family: var(--mono); font-size: 15px; color: var(--accent); }
+.drop__note { margin: 0; font-size: 13px; color: var(--dim); }
+
+.drop__pick {
+  display: inline-block;
+  margin-top: 18px;
+  padding: 9px 18px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--raised);
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+  transition: border-color var(--t), background var(--t);
+}
+.drop__pick:hover { border-color: var(--accent); }
+
+.about {
+  max-width: 520px;
+  font-size: 13px;
+  line-height: 1.65;
+  color: var(--dim);
+}
+.about p { margin: 0 0 10px; }
+.about a { color: var(--accent); }
+.about code { font-family: var(--mono); font-size: 12px; color: var(--text); }
+
+.fail {
+  max-width: 520px;
+  padding: 12px 14px;
+  border: 1px solid var(--error);
+  border-radius: 8px;
+  background: rgba(229, 84, 75, .08);
+  color: var(--error);
+  font-size: 13px;
+  text-align: left;
+}
+
+/* ===== The density strip ===== */
+
+/* Every entry as a tick, placed by time rather than by position in the
+   list — a session that went quiet for half a minute has to show a gap
+   there, which is the whole reason this exists. */
+.strip {
+  position: relative;
+  height: 46px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+  cursor: crosshair;
+  flex: none;
+}
+.strip canvas { display: block; width: 100%; height: 100%; }
+
+.strip__span {
+  position: absolute;
+  top: 0; bottom: 0;
+  background: rgba(220, 225, 232, .07);
+  border-left: 1px solid rgba(220, 225, 232, .18);
+  border-right: 1px solid rgba(220, 225, 232, .18);
+  pointer-events: none;
+}
+.strip__tip {
+  position: absolute;
+  top: 6px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: var(--raised);
+  border: 1px solid var(--border);
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--dim);
+  pointer-events: none;
+  white-space: nowrap;
+  transform: translateX(-50%);
+}
+
+/* ===== The bar ===== */
+
+.bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 8px 16px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+  flex: none;
+}
+
+.search {
+  width: 210px;
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--bg);
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+  transition: border-color var(--t);
+}
+.search:focus { outline: none; border-color: var(--accent); }
+.search::placeholder { color: var(--faint); }
+
+.chips { display: flex; gap: 5px; flex-wrap: wrap; }
+
+.chip {
+  font-family: var(--mono);
+  font-size: 11px;
+  line-height: 1;
+  padding: 6px 9px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--bg);
+  color: var(--dim);
+  cursor: pointer;
+  opacity: .45;
+  transition: opacity var(--t), border-color var(--t);
+}
+.chip.is-on { opacity: 1; border-color: currentColor; }
+.chip--debug { color: var(--debug); }
+.chip--info { color: var(--info); }
+.chip--warning { color: var(--warning); }
+.chip--error { color: var(--error); }
+
+.bar__end { margin-left: auto; display: flex; align-items: center; gap: 8px; }
+.bar__meta {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--dim);
+  font-variant-numeric: tabular-nums;
+}
+
+.btn {
+  padding: 6px 11px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--bg);
+  color: var(--dim);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  transition: color var(--t), border-color var(--t);
+}
+.btn:hover { color: var(--text); border-color: var(--accent); }
+.btn.is-on { color: var(--accent); border-color: var(--accent); }
+
+/* ===== What the reader is warned about ===== */
+
+.banners { flex: none; }
+
+.banner {
+  display: flex;
+  gap: 10px;
+  padding: 9px 16px;
+  font-size: 12.5px;
+  border-bottom: 1px solid var(--border);
+}
+.banner--warn { background: rgba(217, 164, 65, .09); color: var(--warning); }
+.banner--note { background: var(--surface); color: var(--dim); }
+.banner__mark { flex: none; font-family: var(--mono); }
+
+/* ===== Log and panel ===== */
+
+/* The page below the header: strip, bar, banners, then the log beside
+   its panel. A class rather than a style attribute — the CSP forbids
+   those, which is the point of having it. */
+.view {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.split { flex: 1; min-height: 0; display: flex; }
+
+/* Focused on open so the keys work without a click, which must not
+   mean a ring drawn around the whole log. :focus-visible keeps it for
+   the reader who tabbed here. */
+.log:focus { outline: none; }
+.log:focus-visible { outline: 1px solid var(--accent); outline-offset: -1px; }
+
+.log {
+  flex: 1;
+  min-width: 0;
+  overflow: auto;
+  padding: 8px 0 40vh;
+  font-family: var(--mono);
+  font-size: 12.5px;
+  line-height: 1.55;
+}
+
+.row {
+  display: flex;
+  gap: 10px;
+  padding: 2px 16px 2px 13px;
+  border-left: 3px solid transparent;
+  white-space: pre-wrap;
+  word-break: break-word;
+  cursor: default;
+}
+.row:hover { background: rgba(220, 225, 232, .04); }
+.row--debug { border-left-color: var(--debug); }
+.row--info { border-left-color: var(--info); }
+.row--warning { border-left-color: var(--warning); }
+.row--error { border-left-color: var(--error); }
+.row.is-here { background: rgba(91, 157, 217, .12); }
+
+.row__time {
+  flex: none;
+  color: var(--faint);
+  font-variant-numeric: tabular-nums;
+}
+.row__level { flex: none; width: 4.5em; }
+.row--debug .row__level { color: var(--debug); }
+.row--info .row__level { color: var(--info); }
+.row--warning .row__level { color: var(--warning); }
+.row--error .row__level { color: var(--error); }
+
+.row__body { flex: 1; min-width: 0; }
+.row__more {
+  color: var(--faint);
+  cursor: pointer;
+  user-select: none;
+  font-size: 11px;
+}
+.row__more:hover { color: var(--accent); }
+
+.detail {
+  margin: 3px 0 7px;
+  padding-left: 12px;
+  border-left: 1px solid var(--border);
+}
+.detail__label {
+  display: block;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: .07em;
+  color: var(--faint);
+  margin: 6px 0 1px;
+}
+.detail__error { color: var(--error); }
+.detail__stack { color: var(--dim); font-size: 12px; }
+
+/* A pause long enough that the reader should see it as one. */
+.gap {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 3px 16px;
+  color: var(--faint);
+  font-size: 11px;
+  font-family: var(--mono);
+}
+.gap::before, .gap::after {
+  content: "";
+  height: 1px;
+  background: var(--border);
+}
+.gap::before { width: 24px; flex: none; }
+.gap::after { flex: 1; }
+
+/* Where the bundle was cut. It goes at the top, because the beginning
+   is what a limit takes — a reader who does not see this reads the tail
+   of a session as the whole of it. */
+.cut {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 0 6px;
+  padding: 7px 16px;
+  color: var(--warning);
+  font-size: 11px;
+  font-family: var(--mono);
+  background: repeating-linear-gradient(
+    -45deg,
+    transparent, transparent 6px,
+    rgba(217, 164, 65, .07) 6px, rgba(217, 164, 65, .07) 12px
+  );
+  border-bottom: 1px dashed rgba(217, 164, 65, .35);
+}
+
+mark { background: var(--mark); color: #14171C; border-radius: 2px; }
+
+/* ===== Redaction =====
+
+   Two different things happened, and they must not look the same.
+
+   A value that was taken away entirely is a filled bar: nothing to
+   read, and visibly nothing rather than absently nothing. A card number
+   keeps its last four digits on purpose — the redactor checks Luhn so
+   an order id is not starred by accident — and those four are what lets
+   somebody match a payment against a transaction. Barring them too
+   would throw away what the package deliberately kept. */
+
+.red {
+  border-radius: 2px;
+  padding: 0 1px;
+}
+.red--full,
+.red--mask {
+  background: var(--bar);
+  color: transparent;
+}
+.red--keep {
+  color: var(--text);
+  border-bottom: 1px solid var(--bar);
+}
+
+/* ===== The panel ===== */
+
+.side {
+  flex: none;
+  width: 310px;
+  border-left: 1px solid var(--border);
+  background: var(--surface);
+  overflow: auto;
+  padding: 14px;
+}
+.side.is-hidden { display: none; }
+
+.side__desc {
+  font-size: 13.5px;
+  line-height: 1.55;
+  margin: 0 0 14px;
+  white-space: pre-wrap;
+}
+.side h2 {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  color: var(--faint);
+  margin: 16px 0 6px;
+  font-weight: 600;
+}
+.facts {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: var(--mono);
+  font-size: 11.5px;
+}
+.facts td { padding: 3px 0; vertical-align: top; }
+.facts td:first-child { color: var(--dim); padding-right: 10px; white-space: nowrap; }
+.facts td:last-child { word-break: break-word; }
+
+.shot {
+  width: 100%;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  display: block;
+  cursor: zoom-in;
+}
+
+.lightbox {
+  position: fixed;
+  inset: 0;
+  background: rgba(14, 17, 22, .92);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 32px;
+  z-index: 10;
+  cursor: zoom-out;
+}
+.lightbox img { max-width: 100%; max-height: 100%; border-radius: 6px; }
+
+.keys {
+  margin-top: 18px;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--faint);
+  line-height: 1.9;
+}
+.keys b { color: var(--dim); font-weight: 400; }
+
+/* ===== JSON tree for `extra` ===== */
+
+.json { font-size: 12px; }
+.json__box > summary { cursor: pointer; list-style: none; }
+.json__box > summary::-webkit-details-marker { display: none; }
+.json__box > summary::before { content: "▸ "; color: var(--faint); }
+.json__box[open] > summary::before { content: "▾ "; }
+.json__children { padding-left: 14px; }
+.json__key { color: var(--info); }
+.json__str { color: #8FBF7F; }
+.json__num { color: var(--warning); }
+.json__bool, .json__null { color: #B98FD9; }
+.json__punct { color: var(--faint); }
+.json__size { color: var(--faint); font-size: 10px; margin-left: 6px; }
+
+.empty { padding: 30px 16px; color: var(--dim); font-family: var(--sans); }
+
+@media (max-width: 800px) {
+  .split { flex-direction: column; }
+  .side { width: auto; border-left: none; border-top: 1px solid var(--border); max-height: 45vh; }
+  .search { width: 100%; }
+  .vow span { display: none; }
+}

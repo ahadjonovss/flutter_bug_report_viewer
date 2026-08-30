@@ -1,0 +1,2239 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+<!--
+  connect-src 'none' is the load-bearing line in this file.
+
+  The promise this page makes is that a bug report dropped into it does
+  not go anywhere. A promise is worth what the person making it is
+  worth; this is the browser refusing to carry out a fetch, an XHR, a
+  WebSocket or a beacon no matter what the script asks for. A page that
+  cannot make a request cannot leak a log.
+
+  Everything else here follows from the same idea: no CDN, no fonts to
+  fetch, no analytics, nothing loaded from anywhere but this directory.
+-->
+<meta http-equiv="Content-Security-Policy" content="
+  default-src 'none';
+  script-src 'unsafe-inline';
+  style-src 'unsafe-inline';
+  img-src 'self' blob: data:;
+  connect-src 'none';
+  base-uri 'none';
+  form-action 'none'
+" />
+<!-- frame-ancestors is deliberately absent: a browser ignores it in a meta
+     tag and logs an error for it, and an error nobody can fix is an error
+     people learn to scroll past. It belongs in a response header, which is
+     GitHub Pages' business, not this file's. -->
+
+<title>Bug report viewer · flutter_bug_report</title>
+<meta name="description" content="Open a flutter_bug_report bundle — .zip, .json or .txt — and read it. Runs entirely in your browser; nothing is uploaded." />
+<style>
+/* ===================================================================
+   flutter_bug_report log viewer — "Diagnostika"
+
+   A log is not text to be read, it is data to be diagnosed. So colour
+   means something here and is never decoration: a level is the same
+   colour in the density strip, in the row's edge and in its chip, and
+   nothing else in the page competes with those four hues.
+   =================================================================== */
+
+:root {
+  --bg: #0E1116;
+  --surface: #171B22;
+  --raised: #1D222B;
+  --border: #252B35;
+  --text: #DCE1E8;
+  --dim: #707A88;
+  --faint: #4A5361;
+
+  --debug: #5A6472;
+  --info: #5B9DD9;
+  --warning: #D9A441;
+  --error: #E5544B;
+
+  --accent: #5B9DD9;
+  --bar: #3A424F;          /* a redaction bar: present, unreadable */
+  --mark: #D9A441;
+
+  --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --t: .15s ease;
+}
+
+* { box-sizing: border-box; }
+
+html, body { height: 100%; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font: 14px/1.5 var(--sans);
+  -webkit-font-smoothing: antialiased;
+  display: flex;
+  flex-direction: column;
+}
+
+.is-hidden { display: none !important; }
+
+/* ===== The strip along the top of the page ===== */
+
+.top {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+  flex: none;
+}
+
+.brand {
+  font-family: var(--mono);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: -.01em;
+}
+.brand span { color: var(--dim); font-weight: 400; }
+
+/* The claim the whole project rests on, stated where it cannot be
+   missed rather than in a footer. */
+.vow {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 12px;
+  color: var(--dim);
+}
+.vow__dot {
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: #4E9A6A;
+  flex: none;
+}
+.vow code {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--faint);
+}
+
+main {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ===== Nothing open yet ===== */
+
+.drop {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  padding: 40px 24px;
+  text-align: center;
+}
+.drop.is-over .drop__box {
+  border-color: var(--accent);
+  background: rgba(91, 157, 217, .06);
+}
+
+.drop__box {
+  width: 100%;
+  max-width: 520px;
+  padding: 44px 32px;
+  border: 1.5px dashed var(--border);
+  border-radius: 14px;
+  background: var(--surface);
+  transition: border-color var(--t), background var(--t);
+}
+.drop__title { font-size: 17px; font-weight: 600; margin: 0 0 6px; }
+.drop__title code { font-family: var(--mono); font-size: 15px; color: var(--accent); }
+.drop__note { margin: 0; font-size: 13px; color: var(--dim); }
+
+.drop__pick {
+  display: inline-block;
+  margin-top: 18px;
+  padding: 9px 18px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--raised);
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+  transition: border-color var(--t), background var(--t);
+}
+.drop__pick:hover { border-color: var(--accent); }
+
+.about {
+  max-width: 520px;
+  font-size: 13px;
+  line-height: 1.65;
+  color: var(--dim);
+}
+.about p { margin: 0 0 10px; }
+.about a { color: var(--accent); }
+.about code { font-family: var(--mono); font-size: 12px; color: var(--text); }
+
+.fail {
+  max-width: 520px;
+  padding: 12px 14px;
+  border: 1px solid var(--error);
+  border-radius: 8px;
+  background: rgba(229, 84, 75, .08);
+  color: var(--error);
+  font-size: 13px;
+  text-align: left;
+}
+
+/* ===== The density strip ===== */
+
+/* Every entry as a tick, placed by time rather than by position in the
+   list — a session that went quiet for half a minute has to show a gap
+   there, which is the whole reason this exists. */
+.strip {
+  position: relative;
+  height: 46px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+  cursor: crosshair;
+  flex: none;
+}
+.strip canvas { display: block; width: 100%; height: 100%; }
+
+.strip__span {
+  position: absolute;
+  top: 0; bottom: 0;
+  background: rgba(220, 225, 232, .07);
+  border-left: 1px solid rgba(220, 225, 232, .18);
+  border-right: 1px solid rgba(220, 225, 232, .18);
+  pointer-events: none;
+}
+.strip__tip {
+  position: absolute;
+  top: 6px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: var(--raised);
+  border: 1px solid var(--border);
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--dim);
+  pointer-events: none;
+  white-space: nowrap;
+  transform: translateX(-50%);
+}
+
+/* ===== The bar ===== */
+
+.bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 8px 16px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+  flex: none;
+}
+
+.search {
+  width: 210px;
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--bg);
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+  transition: border-color var(--t);
+}
+.search:focus { outline: none; border-color: var(--accent); }
+.search::placeholder { color: var(--faint); }
+
+.chips { display: flex; gap: 5px; flex-wrap: wrap; }
+
+.chip {
+  font-family: var(--mono);
+  font-size: 11px;
+  line-height: 1;
+  padding: 6px 9px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--bg);
+  color: var(--dim);
+  cursor: pointer;
+  opacity: .45;
+  transition: opacity var(--t), border-color var(--t);
+}
+.chip.is-on { opacity: 1; border-color: currentColor; }
+.chip--debug { color: var(--debug); }
+.chip--info { color: var(--info); }
+.chip--warning { color: var(--warning); }
+.chip--error { color: var(--error); }
+
+.bar__end { margin-left: auto; display: flex; align-items: center; gap: 8px; }
+.bar__meta {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--dim);
+  font-variant-numeric: tabular-nums;
+}
+
+.btn {
+  padding: 6px 11px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--bg);
+  color: var(--dim);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  transition: color var(--t), border-color var(--t);
+}
+.btn:hover { color: var(--text); border-color: var(--accent); }
+.btn.is-on { color: var(--accent); border-color: var(--accent); }
+
+/* ===== What the reader is warned about ===== */
+
+.banners { flex: none; }
+
+.banner {
+  display: flex;
+  gap: 10px;
+  padding: 9px 16px;
+  font-size: 12.5px;
+  border-bottom: 1px solid var(--border);
+}
+.banner--warn { background: rgba(217, 164, 65, .09); color: var(--warning); }
+.banner--note { background: var(--surface); color: var(--dim); }
+.banner__mark { flex: none; font-family: var(--mono); }
+
+/* ===== Log and panel ===== */
+
+/* The page below the header: strip, bar, banners, then the log beside
+   its panel. A class rather than a style attribute — the CSP forbids
+   those, which is the point of having it. */
+.view {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.split { flex: 1; min-height: 0; display: flex; }
+
+/* Focused on open so the keys work without a click, which must not
+   mean a ring drawn around the whole log. :focus-visible keeps it for
+   the reader who tabbed here. */
+.log:focus { outline: none; }
+.log:focus-visible { outline: 1px solid var(--accent); outline-offset: -1px; }
+
+.log {
+  flex: 1;
+  min-width: 0;
+  overflow: auto;
+  padding: 8px 0 40vh;
+  font-family: var(--mono);
+  font-size: 12.5px;
+  line-height: 1.55;
+}
+
+.row {
+  display: flex;
+  gap: 10px;
+  padding: 2px 16px 2px 13px;
+  border-left: 3px solid transparent;
+  white-space: pre-wrap;
+  word-break: break-word;
+  cursor: default;
+}
+.row:hover { background: rgba(220, 225, 232, .04); }
+.row--debug { border-left-color: var(--debug); }
+.row--info { border-left-color: var(--info); }
+.row--warning { border-left-color: var(--warning); }
+.row--error { border-left-color: var(--error); }
+.row.is-here { background: rgba(91, 157, 217, .12); }
+
+.row__time {
+  flex: none;
+  color: var(--faint);
+  font-variant-numeric: tabular-nums;
+}
+.row__level { flex: none; width: 4.5em; }
+.row--debug .row__level { color: var(--debug); }
+.row--info .row__level { color: var(--info); }
+.row--warning .row__level { color: var(--warning); }
+.row--error .row__level { color: var(--error); }
+
+.row__body { flex: 1; min-width: 0; }
+.row__more {
+  color: var(--faint);
+  cursor: pointer;
+  user-select: none;
+  font-size: 11px;
+}
+.row__more:hover { color: var(--accent); }
+
+.detail {
+  margin: 3px 0 7px;
+  padding-left: 12px;
+  border-left: 1px solid var(--border);
+}
+.detail__label {
+  display: block;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: .07em;
+  color: var(--faint);
+  margin: 6px 0 1px;
+}
+.detail__error { color: var(--error); }
+.detail__stack { color: var(--dim); font-size: 12px; }
+
+/* A pause long enough that the reader should see it as one. */
+.gap {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 3px 16px;
+  color: var(--faint);
+  font-size: 11px;
+  font-family: var(--mono);
+}
+.gap::before, .gap::after {
+  content: "";
+  height: 1px;
+  background: var(--border);
+}
+.gap::before { width: 24px; flex: none; }
+.gap::after { flex: 1; }
+
+/* Where the bundle was cut. It goes at the top, because the beginning
+   is what a limit takes — a reader who does not see this reads the tail
+   of a session as the whole of it. */
+.cut {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 0 6px;
+  padding: 7px 16px;
+  color: var(--warning);
+  font-size: 11px;
+  font-family: var(--mono);
+  background: repeating-linear-gradient(
+    -45deg,
+    transparent, transparent 6px,
+    rgba(217, 164, 65, .07) 6px, rgba(217, 164, 65, .07) 12px
+  );
+  border-bottom: 1px dashed rgba(217, 164, 65, .35);
+}
+
+mark { background: var(--mark); color: #14171C; border-radius: 2px; }
+
+/* ===== Redaction =====
+
+   Two different things happened, and they must not look the same.
+
+   A value that was taken away entirely is a filled bar: nothing to
+   read, and visibly nothing rather than absently nothing. A card number
+   keeps its last four digits on purpose — the redactor checks Luhn so
+   an order id is not starred by accident — and those four are what lets
+   somebody match a payment against a transaction. Barring them too
+   would throw away what the package deliberately kept. */
+
+.red {
+  border-radius: 2px;
+  padding: 0 1px;
+}
+.red--full,
+.red--mask {
+  background: var(--bar);
+  color: transparent;
+}
+.red--keep {
+  color: var(--text);
+  border-bottom: 1px solid var(--bar);
+}
+
+/* ===== The panel ===== */
+
+.side {
+  flex: none;
+  width: 310px;
+  border-left: 1px solid var(--border);
+  background: var(--surface);
+  overflow: auto;
+  padding: 14px;
+}
+.side.is-hidden { display: none; }
+
+.side__desc {
+  font-size: 13.5px;
+  line-height: 1.55;
+  margin: 0 0 14px;
+  white-space: pre-wrap;
+}
+.side h2 {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  color: var(--faint);
+  margin: 16px 0 6px;
+  font-weight: 600;
+}
+.facts {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: var(--mono);
+  font-size: 11.5px;
+}
+.facts td { padding: 3px 0; vertical-align: top; }
+.facts td:first-child { color: var(--dim); padding-right: 10px; white-space: nowrap; }
+.facts td:last-child { word-break: break-word; }
+
+.shot {
+  width: 100%;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  display: block;
+  cursor: zoom-in;
+}
+
+.lightbox {
+  position: fixed;
+  inset: 0;
+  background: rgba(14, 17, 22, .92);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 32px;
+  z-index: 10;
+  cursor: zoom-out;
+}
+.lightbox img { max-width: 100%; max-height: 100%; border-radius: 6px; }
+
+.keys {
+  margin-top: 18px;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--faint);
+  line-height: 1.9;
+}
+.keys b { color: var(--dim); font-weight: 400; }
+
+/* ===== JSON tree for `extra` ===== */
+
+.json { font-size: 12px; }
+.json__box > summary { cursor: pointer; list-style: none; }
+.json__box > summary::-webkit-details-marker { display: none; }
+.json__box > summary::before { content: "▸ "; color: var(--faint); }
+.json__box[open] > summary::before { content: "▾ "; }
+.json__children { padding-left: 14px; }
+.json__key { color: var(--info); }
+.json__str { color: #8FBF7F; }
+.json__num { color: var(--warning); }
+.json__bool, .json__null { color: #B98FD9; }
+.json__punct { color: var(--faint); }
+.json__size { color: var(--faint); font-size: 10px; margin-left: 6px; }
+
+.empty { padding: 30px 16px; color: var(--dim); font-family: var(--sans); }
+
+@media (max-width: 800px) {
+  .split { flex-direction: column; }
+  .side { width: auto; border-left: none; border-top: 1px solid var(--border); max-height: 45vh; }
+  .search { width: 100%; }
+  .vow span { display: none; }
+}
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="brand">flutter_bug_report <span>· viewer</span></div>
+  <div class="vow">
+    <span class="vow__dot" aria-hidden="true"></span>
+    <span>Nothing leaves your machine —</span>
+    <code>connect-src 'none'</code>
+  </div>
+</header>
+
+<main>
+  <!-- ===== Nothing open ===== -->
+  <section class="drop" id="drop">
+    <div class="drop__box">
+      <p class="drop__title">Drop a bundle — <code>.zip</code>, <code>.json</code> or <code>.txt</code></p>
+      <p class="drop__note">Or paste the log. Or pick the file.</p>
+      <label class="drop__pick">
+        Choose a file
+        <input id="picker" type="file" multiple accept=".zip,.json,.txt,.log,.png" hidden />
+      </label>
+    </div>
+
+    <p class="fail is-hidden" id="fail"></p>
+
+    <div class="about">
+      <p>
+        A bundle is what <a href="https://pub.dev/packages/flutter_bug_report" rel="noopener">flutter_bug_report</a>
+        attaches to a bug report: the app's log, redacted and bounded, with the
+        report's own description and a screenshot beside it.
+      </p>
+      <p>
+        It is read here in the page and never uploaded — there is no server to
+        upload it to. The bundle was redacted on the device before it was
+        written, but it still carries real data, and a
+        <code>screenshot.png</code> cannot be redacted at all. Save this page and
+        it works with no network at all.
+      </p>
+    </div>
+  </section>
+
+  <!-- ===== A bundle, open ===== -->
+  <section class="view is-hidden" id="view">
+    <div class="strip" id="strip" title="The session over time. Click to jump.">
+      <canvas id="canvas"></canvas>
+    </div>
+
+    <div class="bar">
+      <input id="search" class="search" type="search" placeholder="Filter lines…" autocomplete="off" spellcheck="false" />
+      <div class="chips" id="chips"></div>
+      <div class="bar__end">
+        <span class="bar__meta" id="meta"></span>
+        <button class="btn" id="zone" type="button" title="Show times in UTC instead of local">UTC</button>
+        <button class="btn" id="copy" type="button">Copy</button>
+        <button class="btn" id="close" type="button">Close</button>
+      </div>
+    </div>
+
+    <div class="banners" id="banners"></div>
+
+    <div class="split">
+      <div class="log" id="log" tabindex="0"></div>
+      <aside class="side" id="side"></aside>
+    </div>
+  </section>
+</main>
+
+<script>
+(function (root) {
+  "use strict";
+
+  // ===================================================================
+  //  A ZIP reader for bug-report bundles.
+  //
+  //  Small on purpose. A bundle holds two or three files, is bounded to
+  //  256KB before compression, and is written by one encoder, so none of
+  //  zip64, encryption or spanning can appear in one. What can appear is
+  //  a bundle somebody unzipped, looked at, and zipped again — which is
+  //  why this reads the central directory at the end of the file rather
+  //  than the local headers.
+  //
+  //  A local header may carry zeroed sizes and defer them to a data
+  //  descriptor after the payload; the central directory never does. It
+  //  is the one place in a zip where the sizes are always right.
+  //
+  //  Inflating is the browser's job: DecompressionStream has been in
+  //  every engine since 2023, and shipping a second implementation of
+  //  DEFLATE to save that dependency would be the wrong trade.
+  // ===================================================================
+
+  var LOCAL = 0x04034b50;
+  var CENTRAL = 0x02014b50;
+  var EOCD = 0x06054b50;
+
+  // A zip's end record carries a comment of up to 65535 bytes, so the
+  // signature can be that far from the end and no further.
+  var EOCD_MAX = 65557;
+
+  var STORED = 0;
+  var DEFLATE = 8;
+
+  // 0xFFFFFFFF in a size field means "look in the zip64 extra field".
+  // A bundle cannot reach 4GB, so seeing it means this is not one.
+  var ZIP64 = 0xffffffff;
+
+  function fail(message) {
+    var error = new Error(message);
+    error.name = "ZipError";
+    throw error;
+  }
+
+  // ===== CRC-32 =====
+
+  // Checked rather than trusted: a bundle that was truncated in transit —
+  // a half-finished download, a mail gateway that cut the attachment —
+  // still unzips into something that looks like a log. The checksum is
+  // what tells the reader they are looking at a damaged file instead of
+  // letting them draw conclusions from half a session.
+  var table = null;
+
+  function crc32(bytes) {
+    if (!table) {
+      table = new Int32Array(256);
+      for (var n = 0; n < 256; n++) {
+        var c = n;
+        for (var k = 0; k < 8; k++) {
+          c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
+        }
+        table[n] = c;
+      }
+    }
+
+    var crc = -1;
+    for (var i = 0; i < bytes.length; i++) {
+      crc = (crc >>> 8) ^ table[(crc ^ bytes[i]) & 0xff];
+    }
+
+    return (crc ^ -1) >>> 0;
+  }
+
+  // ===== Finding the end =====
+
+  function findEocd(view, length) {
+    var earliest = Math.max(0, length - EOCD_MAX);
+
+    // Backwards: the comment is the only thing that can follow the record,
+    // and the last match is the real one.
+    for (var at = length - 22; at >= earliest; at--) {
+      if (view.getUint32(at, true) === EOCD) return at;
+    }
+
+    return -1;
+  }
+
+  // ===== Reading the directory =====
+
+  function readCentral(view, bytes, start, count) {
+    var files = [];
+    var at = start;
+
+    for (var i = 0; i < count; i++) {
+      if (at + 46 > bytes.length) fail("The zip's directory runs past the end of the file.");
+      if (view.getUint32(at, true) !== CENTRAL) fail("The zip's directory is not where the file says it is.");
+
+      var method = view.getUint16(at + 10, true);
+      var crc = view.getUint32(at + 16, true);
+      var compressed = view.getUint32(at + 20, true);
+      var uncompressed = view.getUint32(at + 24, true);
+      var nameLength = view.getUint16(at + 28, true);
+      var extraLength = view.getUint16(at + 30, true);
+      var commentLength = view.getUint16(at + 32, true);
+      var offset = view.getUint32(at + 42, true);
+
+      if (compressed === ZIP64 || uncompressed === ZIP64 || offset === ZIP64) {
+        fail("This is a zip64 archive. A bug-report bundle is never one, so this file is something else.");
+      }
+
+      files.push({
+        name: text(bytes.subarray(at + 46, at + 46 + nameLength)),
+        method: method,
+        crc: crc,
+        compressed: compressed,
+        uncompressed: uncompressed,
+        offset: offset
+      });
+
+      at += 46 + nameLength + extraLength + commentLength;
+    }
+
+    return files;
+  }
+
+  // Names are UTF-8 whenever bit 11 is set, which the builder sets and
+  // every modern archiver sets. Decoding as UTF-8 regardless is right for
+  // ASCII names too, and every name in a bundle is ASCII.
+  function text(bytes) {
+    return new TextDecoder("utf-8").decode(bytes);
+  }
+
+  // ===== Reading one file's bytes =====
+
+  function locate(view, bytes, file) {
+    var at = file.offset;
+
+    if (at + 30 > bytes.length) fail("An entry in the zip points past the end of the file.");
+    if (view.getUint32(at, true) !== LOCAL) fail("An entry in the zip is missing its header.");
+
+    // Only the name and extra lengths are read from here. Everything else
+    // came from the directory, where it is reliable.
+    var nameLength = view.getUint16(at + 26, true);
+    var extraLength = view.getUint16(at + 28, true);
+    var from = at + 30 + nameLength + extraLength;
+
+    if (from + file.compressed > bytes.length) fail("An entry in the zip is cut short. The file is incomplete.");
+
+    return bytes.subarray(from, from + file.compressed);
+  }
+
+  function inflate(payload) {
+    if (typeof DecompressionStream === "undefined") {
+      return Promise.reject(new Error(
+        "This browser cannot decompress a zip. Chrome 103, Safari 16.4, Firefox 113 or newer can — " +
+        "or ask for the .json or .txt form of the bundle instead."
+      ));
+    }
+
+    // deflate-raw, not deflate: a zip stores the DEFLATE stream without the
+    // zlib header that "deflate" expects.
+    var stream = new DecompressionStream("deflate-raw");
+    var writer = stream.writable.getWriter();
+
+    // Both ends of the stream reject when the payload is not valid
+    // DEFLATE, and an unhandled one of those takes the process down in
+    // node and logs an error in the page. The read side is the one that
+    // carries the failure onward, so the write side is quietened here.
+    writer.write(payload).catch(function () {});
+    writer.close().catch(function () {});
+
+    return new Response(stream.readable).arrayBuffer().then(function (buffer) {
+      return new Uint8Array(buffer);
+    }, function () {
+      throw new Error("A file inside the zip is not valid compressed data. The bundle is damaged.");
+    });
+  }
+
+  function extract(view, bytes, file) {
+    var payload = locate(view, bytes, file);
+
+    var raw =
+      file.method === STORED ? Promise.resolve(payload) :
+      file.method === DEFLATE ? inflate(payload) :
+      Promise.reject(new Error("'" + file.name + "' uses a compression method this reader does not know."));
+
+    return raw.then(function (content) {
+      if (content.length !== file.uncompressed) {
+        fail("'" + file.name + "' did not decompress to the size the zip claims. The file is damaged.");
+      }
+
+      if (crc32(content) !== file.crc) {
+        fail("'" + file.name + "' failed its checksum. The file is damaged or was cut in transit.");
+      }
+
+      return { name: file.name, bytes: content };
+    });
+  }
+
+  // ===== The one entry point =====
+
+  // Takes the bundle's bytes, gives back every file in it. Directories and
+  // the junk a Mac leaves behind are dropped here rather than by every
+  // caller: a zip that has been through Finder carries __MACOSX entries
+  // that are not part of the bundle and never were.
+  function read(input) {
+    return Promise.resolve().then(function () {
+      var bytes = input instanceof Uint8Array ? input : new Uint8Array(input);
+
+      if (bytes.length < 22) fail("This file is too small to be a zip.");
+
+      var view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+      var eocd = findEocd(view, bytes.length);
+
+      if (eocd === -1) fail("This does not end like a zip. If it was downloaded, the download may be incomplete.");
+
+      var count = view.getUint16(eocd + 10, true);
+      var offset = view.getUint32(eocd + 16, true);
+
+      if (offset === ZIP64) fail("This is a zip64 archive. A bug-report bundle is never one.");
+
+      var wanted = readCentral(view, bytes, offset, count).filter(function (file) {
+        return !/\/$/.test(file.name) && file.name.indexOf("__MACOSX/") !== 0 &&
+          file.name.split("/").pop().indexOf("._") !== 0;
+      });
+
+      return Promise.all(wanted.map(function (file) {
+        return extract(view, bytes, file);
+      }));
+    });
+  }
+
+  root.FBR = root.FBR || {};
+  root.FBR.unzip = { read: read, crc32: crc32 };
+})(typeof globalThis !== "undefined" ? globalThis : this);
+</script>
+<script>
+(function (root) {
+  "use strict";
+
+  // ===================================================================
+  //  Reading a flutter_bug_report bundle.
+  //
+  //  Three renderings of the same thing: a zip holding both, a json
+  //  object, and a text document. All three come out of here as one
+  //  shape, so nothing downstream has to know which arrived.
+  //
+  //  Nothing in this file touches the DOM. It runs in a test as easily
+  //  as in the page, which is the only way the text parser below is
+  //  going to stay correct.
+  // ===================================================================
+
+  var LEVELS = ["debug", "info", "warning", "error"];
+
+  // The header fields the builder writes, in the order it writes them.
+  // Used to tell a new field from a line of a description that happens to
+  // read like one — see readHeader.
+  var FIELDS = ["generated_at", "description", "entry_count", "truncated", "screenshot", "metadata"];
+
+  // How a level is written in a text bundle: upper case, padded to seven
+  // so every message starts at the same column.
+  function label(level) {
+    return (level.toUpperCase() + "       ").slice(0, 7);
+  }
+
+  // The entry boundary, and the whole basis of the text parser.
+  //
+  // Anchored on the timestamp *and* the exact padding, never on
+  // indentation: the builder writes a message raw, and a message that
+  // arrived through debugPrint can be a Flutter error banner spanning
+  // several unindented lines. Indentation cannot say where an entry ends.
+  // Demanding the padding is what stops a line that merely quotes a
+  // timestamp from being mistaken for the start of one.
+  var ENTRY = new RegExp(
+    "^(\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{1,6}Z) (" +
+    LEVELS.map(label).join("|") +
+    ") (.*)$"
+  );
+
+  var HEADER_OPEN = "=== flutter_bug_report ===";
+  var HEADER_CLOSE = /^={3,}$/;
+
+  // A field at the top of the header block: no indentation, snake_case,
+  // a colon.
+  var FIELD = /^([a-z_][a-z0-9_]*):[ ]?(.*)$/;
+
+  // A stack frame, once the two-space indent is off. The suspension
+  // marker is a frame for our purposes: the builder keeps it, and it is
+  // the line that explains a gap in the trace.
+  var FRAME = /^(#\d+\s|<asynchronous suspension>$|<\.\.\.\s|<\.\.\.>$)/;
+
+  var PNG = [0x89, 0x50, 0x4e, 0x47];
+  var ZIP = [0x50, 0x4b];
+
+  function starts(bytes, signature) {
+    if (bytes.length < signature.length) return false;
+    for (var i = 0; i < signature.length; i++) {
+      if (bytes[i] !== signature[i]) return false;
+    }
+    return true;
+  }
+
+  function decode(bytes) {
+    return new TextDecoder("utf-8").decode(bytes);
+  }
+
+  // \r\n from a bundle that went through a Windows mail client, and the
+  // byte-order mark a text editor adds when it saves one.
+  function lines(text) {
+    return text.replace(/^﻿/, "").replace(/\r\n?/g, "\n").split("\n");
+  }
+
+  // An entry's time as a number, for measuring the distance between two
+  // of them.
+  //
+  // The bundle writes microseconds and a Date holds milliseconds, so the
+  // tail is cut here rather than left to an engine to be lenient about.
+  // Precision beyond a millisecond is not something a reader is going to
+  // act on; a thirty-second gap in the middle of a session is.
+  function epoch(time) {
+    if (typeof time !== "string") return null;
+
+    var value = Date.parse(time.replace(/\.(\d{3})\d+Z$/, ".$1Z"));
+
+    return isNaN(value) ? null : value;
+  }
+
+  function indented(line) {
+    return line.slice(0, 2) === "  ";
+  }
+
+  function dedent(line) {
+    return indented(line) ? line.slice(2) : line;
+  }
+
+  // ===================================================================
+  //  Text
+  // ===================================================================
+
+  // Everything up to the rule of equals signs.
+  //
+  // Two kinds of continuation live in here. `metadata:` opens a block of
+  // indented `key: value` pairs. A description can also wrap, because the
+  // sheet takes four lines — indented since 0.3.1, and bare in every
+  // bundle written before it, which is why an unrecognised line falls
+  // through to the field above rather than being dropped.
+  function readHeader(all, from) {
+    var report = { metadata: null };
+    var raw = {};
+    var key = null;
+    var at = from;
+
+    for (; at < all.length; at++) {
+      var line = all[at];
+
+      if (HEADER_CLOSE.test(line)) {
+        at++;
+        break;
+      }
+
+      var field = FIELD.exec(line);
+
+      // A known field always opens a new one. An unknown one does too,
+      // so a field added to the format later is not swallowed — except
+      // while a description is open, since that is the only free-text
+      // field and the only place a stray `word: value` can legitimately
+      // appear.
+      if (field && (FIELDS.indexOf(field[1]) !== -1 || key !== "description")) {
+        key = field[1];
+        raw[key] = field[2];
+        if (key === "metadata") report.metadata = {};
+        continue;
+      }
+
+      if (key === null) continue;
+
+      if (key === "metadata" && indented(line)) {
+        var pair = FIELD.exec(dedent(line));
+        if (pair) report.metadata[pair[1]] = pair[2];
+        continue;
+      }
+
+      raw[key] += "\n" + dedent(line);
+    }
+
+    report.generatedAt = raw.generated_at || null;
+    report.description = raw.description || null;
+    report.entryCount = raw.entry_count === undefined ? null : Number(raw.entry_count);
+    report.truncated = raw.truncated === "true";
+    report.screenshot = raw.screenshot || null;
+
+    return { report: report, next: at };
+  }
+
+  // The lines that followed an entry's own line, sorted back into the
+  // fields they were written from.
+  //
+  // Best-effort, and knowingly so. The builder writes extra, then error,
+  // then frames, each indented two spaces — but an unindented run at the
+  // front is the rest of a multi-line message, and there is no marker
+  // separating error from extra beyond their shape.
+  function readTail(entry, rest) {
+    var i = 0;
+    while (i < rest.length && !indented(rest[i])) {
+      entry.message += "\n" + rest[i];
+      i++;
+    }
+
+    var tail = rest.slice(i).map(dedent);
+
+    // Frames come last, so they are taken from the back. Anything that
+    // stops matching ends the trace.
+    var end = tail.length;
+    while (end > 0 && FRAME.test(tail[end - 1])) end--;
+
+    if (end < tail.length) entry.stackTrace = tail.slice(end).join("\n");
+
+    var head = tail.slice(0, end);
+
+    // extra is written as one line of compact JSON. Joined progressively
+    // anyway, because a value inside it can carry a newline of its own.
+    if (head.length && head[0].charAt(0) === "{") {
+      for (var take = 1; take <= head.length; take++) {
+        var parsed = asObject(head.slice(0, take).join("\n"));
+        if (parsed !== undefined) {
+          entry.extra = parsed;
+          head = head.slice(take);
+          break;
+        }
+      }
+    }
+
+    if (head.length) entry.error = head.join("\n");
+  }
+
+  // undefined rather than null when it is not an object: null is a value
+  // the log itself can hold.
+  function asObject(text) {
+    try {
+      var value = JSON.parse(text);
+      return value !== null && typeof value === "object" && !Array.isArray(value) ? value : undefined;
+    } catch (e) {
+      return undefined;
+    }
+  }
+
+  function readEntries(all, from) {
+    var entries = [];
+    var open = null;
+    var rest = [];
+
+    function close() {
+      if (!open) return;
+      while (rest.length && rest[rest.length - 1] === "") rest.pop();
+      if (rest.length) readTail(open, rest);
+      entries.push(open);
+      open = null;
+      rest = [];
+    }
+
+    for (var at = from; at < all.length; at++) {
+      var match = ENTRY.exec(all[at]);
+
+      if (match) {
+        close();
+        open = {
+          index: entries.length,
+          time: match[1],
+          at: epoch(match[1]),
+          level: match[2].trim().toLowerCase(),
+          message: match[3],
+          error: null,
+          stackTrace: null,
+          extra: null
+        };
+        continue;
+      }
+
+      if (open) rest.push(all[at]);
+    }
+
+    close();
+
+    return entries;
+  }
+
+  function parseText(text) {
+    var all = lines(text);
+    var at = 0;
+
+    while (at < all.length && all[at].trim() === "") at++;
+
+    var header = all[at] === HEADER_OPEN
+      ? readHeader(all, at + 1)
+      : { report: { generatedAt: null, description: null, entryCount: null, truncated: false, screenshot: null, metadata: null }, next: at };
+
+    return {
+      source: all[at] === HEADER_OPEN ? "text" : "text-headerless",
+      report: header.report,
+      entries: readEntries(all, header.next),
+      exact: false
+    };
+  }
+
+  // ===================================================================
+  //  JSON
+  // ===================================================================
+
+  function parseJson(text) {
+    var whole;
+
+    try {
+      whole = JSON.parse(text);
+    } catch (e) {
+      throw new Error("This looks like JSON but does not parse: " + e.message);
+    }
+
+    if (!whole || typeof whole !== "object") throw new Error("This JSON is not a bundle.");
+    if (!Array.isArray(whole.entries)) throw new Error("This JSON has no 'entries' array, so it is not a bundle.");
+
+    var head = whole.report && typeof whole.report === "object" ? whole.report : {};
+
+    return {
+      source: "json",
+      report: {
+        generatedAt: head.generated_at || null,
+        description: head.description || null,
+        entryCount: head.entry_count === undefined ? null : head.entry_count,
+        truncated: head.truncated === true,
+        screenshot: head.screenshot || null,
+        metadata: head.metadata && typeof head.metadata === "object" ? head.metadata : null
+      },
+      entries: whole.entries.map(function (row, index) {
+        row = row && typeof row === "object" ? row : {};
+
+        return {
+          index: index,
+          time: typeof row.time === "string" ? row.time : null,
+          at: epoch(row.time),
+          level: typeof row.level === "string" ? row.level.toLowerCase() : "info",
+          message: typeof row.message === "string" ? row.message : "",
+          error: typeof row.error === "string" ? row.error : null,
+          stackTrace: typeof row.stack_trace === "string" ? row.stack_trace : null,
+          extra: row.extra && typeof row.extra === "object" ? row.extra : null
+        };
+      }),
+      exact: true
+    };
+  }
+
+  // ===================================================================
+  //  What kind of file is this
+  // ===================================================================
+
+  // By content, never by extension. A bundle arrives renamed, re-zipped,
+  // or as a logs.txt somebody pulled out of the archive by hand, and the
+  // name it carries by then says nothing.
+  function detect(bytes) {
+    if (starts(bytes, ZIP)) return "zip";
+    if (starts(bytes, PNG)) return "png";
+
+    var text;
+    try {
+      text = decode(bytes);
+    } catch (e) {
+      return "unknown";
+    }
+
+    var trimmed = text.replace(/^﻿/, "").replace(/^\s+/, "");
+
+    if (trimmed.charAt(0) === "{") return asObject(trimmed) ? "json" : "unknown";
+    if (trimmed.indexOf(HEADER_OPEN) === 0) return "text";
+
+    var all = lines(trimmed);
+    for (var i = 0; i < all.length; i++) {
+      if (all[i].trim() === "") continue;
+      return ENTRY.test(all[i]) ? "text-headerless" : "unknown";
+    }
+
+    return "unknown";
+  }
+
+  // ===================================================================
+  //  Putting one together
+  // ===================================================================
+
+  function note(bundle, kind, text) {
+    bundle.notices.push({ kind: kind, text: text });
+  }
+
+  // What is true of a bundle whichever way it arrived.
+  function finish(bundle) {
+    bundle.notices = bundle.notices || [];
+    bundle.screenshot = bundle.screenshot || null;
+
+    if (bundle.report.truncated) {
+      note(bundle, "warn",
+        "This bundle was cut to fit a limit. The beginning of the session is missing — " +
+        "what you are reading is the end of it.");
+    }
+
+    var counted = bundle.report.entryCount;
+    if (counted !== null && counted !== bundle.entries.length) {
+      note(bundle, "warn",
+        "The report counts " + counted + " entries but " + bundle.entries.length + " are here. " +
+        "The file is damaged or was cut short.");
+    }
+
+    if (bundle.report.screenshot && !bundle.screenshot) {
+      note(bundle, "note",
+        "A screenshot was attached to this report, but it is not in this file — only a .zip can carry one. " +
+        "Ask for the .zip form.");
+    }
+
+    if (!bundle.exact) {
+      note(bundle, "note",
+        "Read from text. Where a message ends and its error, extra and stack begin is inferred; " +
+        "the .zip and .json forms say so exactly.");
+    }
+
+    var unknown = {};
+    bundle.entries.forEach(function (entry) {
+      if (LEVELS.indexOf(entry.level) === -1) unknown[entry.level] = true;
+    });
+
+    Object.keys(unknown).forEach(function (level) {
+      note(bundle, "note", "This bundle carries a level this viewer does not know: '" + level + "'.");
+    });
+
+    return bundle;
+  }
+
+  function fromBytes(bytes, kind) {
+    var bundle =
+      kind === "json" ? parseJson(decode(bytes)) :
+      parseText(decode(bytes));
+
+    bundle.notices = [];
+
+    return bundle;
+  }
+
+  // A bundle in pieces: logs.txt, report.json and screenshot.png, either
+  // out of a zip or dropped together by somebody who unzipped it first.
+  //
+  // report.json wins where both are present. It is the exact rendering,
+  // and logs.txt is the same entries with their edges rubbed off.
+  function combine(files, source) {
+    var screenshot = null;
+    var json = null;
+    var txt = null;
+
+    files.forEach(function (file) {
+      var kind = detect(file.bytes);
+
+      if (kind === "png") screenshot = screenshot || file.bytes;
+      else if (kind === "json") json = json || file.bytes;
+      else if (kind === "text" || kind === "text-headerless") txt = txt || file.bytes;
+    });
+
+    if (!json && !txt) throw new Error("Nothing in here is a log. Expected logs.txt or report.json.");
+
+    var bundle = fromBytes(json || txt, json ? "json" : "text");
+
+    bundle.source = source;
+    bundle.screenshot = screenshot;
+
+    // The text form carries no header inside a zip, so where a bundle
+    // came in as pieces and only logs.txt was readable, the report is
+    // whatever report.json would have said — nothing.
+    return bundle;
+  }
+
+  // The entry point. Takes what was dropped, gives back one bundle.
+  //
+  // Every input is { name, bytes }. Names are used for nothing but the
+  // label at the top of the page; what a file is gets decided by reading
+  // it.
+  function open(files) {
+    return Promise.resolve().then(function () {
+      if (!files || !files.length) throw new Error("Nothing was dropped.");
+
+      var zip = files.filter(function (file) {
+        return detect(file.bytes) === "zip";
+      });
+
+      if (zip.length) {
+        return root.FBR.unzip.read(zip[0].bytes).then(function (inside) {
+          if (!inside.length) throw new Error("That zip is empty.");
+          return finish(combine(inside, "zip"));
+        });
+      }
+
+      if (files.length > 1) return finish(combine(files, "files"));
+
+      var only = files[0];
+      var kind = detect(only.bytes);
+
+      if (kind === "png") {
+        throw new Error("That is an image on its own. Drop it together with logs.txt or report.json, or drop the whole .zip.");
+      }
+
+      if (kind === "unknown") {
+        throw new Error("This is not a flutter_bug_report bundle. Expected a .zip, a .json, or a log in text form.");
+      }
+
+      return finish(fromBytes(only.bytes, kind));
+    });
+  }
+
+  // Pasted straight out of a terminal or an attachment preview, which is
+  // where a log is about as often as it is in a file.
+  function openText(text) {
+    return Promise.resolve().then(function () {
+      var bytes = new TextEncoder().encode(text);
+      var kind = detect(bytes);
+
+      if (kind !== "json" && kind !== "text" && kind !== "text-headerless") {
+        throw new Error("That does not read like a bundle or a log.");
+      }
+
+      return finish(fromBytes(bytes, kind));
+    });
+  }
+
+  root.FBR = root.FBR || {};
+  root.FBR.parse = {
+    open: open,
+    openText: openText,
+    detect: detect,
+    parseText: parseText,
+    parseJson: parseJson,
+    LEVELS: LEVELS,
+    ENTRY: ENTRY
+  };
+})(typeof globalThis !== "undefined" ? globalThis : this);
+</script>
+<script>
+(function () {
+  "use strict";
+
+  // ===================================================================
+  //  The page.
+  //
+  //  Everything that knows what a bundle is lives in parse.js; this file
+  //  only draws one. It never builds markup from a string — a bundle
+  //  carries an app's real output, including whatever a server put in a
+  //  response body, and text from a log goes into the document as text
+  //  or not at all.
+  // ===================================================================
+
+  var LEVELS = ["debug", "info", "warning", "error"];
+
+  // How much of a pause is worth interrupting the log to point at. Below
+  // a second or two everything looks like a gap and nothing is one.
+  var GAP = 2000;
+
+  // Rows are appended in batches as the reader scrolls. A bundle is
+  // bounded to 256KB by default but the limit is the caller's to raise,
+  // and laying out ten thousand rows before the first one can be read is
+  // a poor trade for a file somebody opened to look at one error.
+  var CHUNK = 400;
+
+  var el = {};
+  ["drop", "picker", "fail", "view", "strip", "canvas", "search", "chips", "meta",
+   "zone", "copy", "close", "banners", "log", "side"].forEach(function (id) {
+    el[id] = document.getElementById(id);
+  });
+
+  var bundle = null;
+  var shown = [];        // the entries passing the filter, in order
+  var drawn = 0;         // how many of them are in the document
+  var muted = {};
+  var needle = "";
+  var utc = false;
+  var here = -1;         // the entry the reader was last sent to
+  var name = "";
+  var shotUrl = null;
+
+  // ===== Small DOM helpers =====
+
+  function make(tag, className, text) {
+    var node = document.createElement(tag);
+    if (className) node.className = className;
+    if (text !== undefined) node.textContent = text;
+    return node;
+  }
+
+  function clear(node) {
+    while (node.firstChild) node.removeChild(node.firstChild);
+  }
+
+  // ===== Writing log text into the page =====
+
+  // A search hit, marked without letting the log's own text become
+  // markup: the text goes in as text and the marks are built around it.
+  function mark(target, text, hunt) {
+    if (!text) return;
+
+    if (!hunt) {
+      target.appendChild(document.createTextNode(text));
+      return;
+    }
+
+    var lower = text.toLowerCase();
+    var from = 0;
+
+    for (;;) {
+      var hit = lower.indexOf(hunt, from);
+      if (hit === -1) break;
+
+      target.appendChild(document.createTextNode(text.slice(from, hit)));
+      target.appendChild(make("mark", null, text.slice(hit, hit + hunt.length)));
+      from = hit + hunt.length;
+    }
+
+    target.appendChild(document.createTextNode(text.slice(from)));
+  }
+
+  // What the redactor leaves behind. Two shapes, and they mean different
+  // things — see redaction() below.
+  var REDACTION = /«redacted»|\*{4,}\d{2,4}/g;
+
+  function barred(target, className, text, why) {
+    var span = make("span", "red " + className, text);
+    span.title = why;
+    target.appendChild(span);
+  }
+
+  // A value that was taken away entirely reads as a filled bar: there is
+  // nothing to read and it is visibly nothing.
+  //
+  // A card number is not the same case. The redactor keeps the last four
+  // digits deliberately — it checks Luhn first, so an invoice number is
+  // not starred by accident — because those four are what lets somebody
+  // match a payment to a transaction. Barring them along with the rest
+  // would throw away the part the package went to trouble to keep.
+  function redaction(target, text) {
+    if (text.charAt(0) !== "*") {
+      barred(target, "red--full", text, "A value was removed before this bundle was written.");
+      return;
+    }
+
+    var stars = text.match(/^\*+/)[0];
+
+    barred(target, "red--mask", stars, "Digits removed before this bundle was written.");
+    if (text.length > stars.length) {
+      barred(target, "red--keep", text.slice(stars.length),
+        "Kept on purpose: the last digits of a card, so a payment can still be matched.");
+    }
+  }
+
+  function write(target, text, hunt) {
+    var from = 0;
+    var match;
+
+    REDACTION.lastIndex = 0;
+
+    while ((match = REDACTION.exec(text)) !== null) {
+      mark(target, text.slice(from, match.index), hunt);
+      redaction(target, match[0]);
+      from = match.index + match[0].length;
+    }
+
+    mark(target, text.slice(from), hunt);
+  }
+
+  function countRedactions(entries) {
+    var n = 0;
+
+    entries.forEach(function (entry) {
+      var text = entry.message + " " + (entry.error || "") + " " +
+        (entry.extra ? JSON.stringify(entry.extra) : "");
+      var found = text.match(REDACTION);
+      if (found) n += found.length;
+    });
+
+    return n;
+  }
+
+  // ===== extra, as a tree =====
+
+  function leaf(value, hunt) {
+    var span = make("span");
+
+    if (typeof value === "string") {
+      span.className = "json__str";
+      write(span, '"' + value + '"', hunt);
+      return span;
+    }
+
+    span.className = value === null ? "json__null" :
+      typeof value === "number" ? "json__num" : "json__bool";
+    span.textContent = String(value);
+
+    return span;
+  }
+
+  function key(label, hunt) {
+    var span = make("span", "json__key");
+    write(span, label, hunt);
+    span.appendChild(document.createTextNode(": "));
+    return span;
+  }
+
+  function node(value, hunt, depth, label) {
+    if (value === null || typeof value !== "object") {
+      var line = make("div", "json__line");
+      if (label !== null) line.appendChild(key(label, hunt));
+      line.appendChild(leaf(value, hunt));
+      return line;
+    }
+
+    var isArray = Array.isArray(value);
+    var keys = isArray ? null : Object.keys(value);
+    var count = isArray ? value.length : keys.length;
+    var open = isArray ? "[" : "{";
+    var shut = isArray ? "]" : "}";
+
+    if (!count) {
+      var flat = make("div", "json__line");
+      if (label !== null) flat.appendChild(key(label, hunt));
+      flat.appendChild(make("span", "json__punct", open + shut));
+      return flat;
+    }
+
+    var box = make("details", "json__box");
+    box.open = depth < 2 || count <= 4;
+
+    var head = make("summary", "json__line");
+    if (label !== null) head.appendChild(key(label, hunt));
+    head.appendChild(make("span", "json__punct", open));
+    head.appendChild(make("span", "json__size", count === 1 ? "1 item" : count + " items"));
+    box.appendChild(head);
+
+    var kids = make("div", "json__children");
+    (isArray ? value : keys).forEach(function (item) {
+      kids.appendChild(node(isArray ? item : value[item], hunt, depth + 1, isArray ? null : item));
+    });
+    box.appendChild(kids);
+
+    var tail = make("div", "json__line");
+    tail.appendChild(make("span", "json__punct", shut));
+    box.appendChild(tail);
+
+    return box;
+  }
+
+  // ===== Time =====
+
+  function two(n) { return n < 10 ? "0" + n : String(n); }
+  function three(n) { return n < 10 ? "00" + n : n < 100 ? "0" + n : String(n); }
+
+  function clock(entry) {
+    if (entry.at === null || entry.at === undefined) return "";
+
+    var d = new Date(entry.at);
+    var h = utc ? d.getUTCHours() : d.getHours();
+    var m = utc ? d.getUTCMinutes() : d.getMinutes();
+    var s = utc ? d.getUTCSeconds() : d.getSeconds();
+
+    return two(h) + ":" + two(m) + ":" + two(s) + "." + three(utc ? d.getUTCMilliseconds() : d.getMilliseconds());
+  }
+
+  function stamp(iso) {
+    if (!iso) return "—";
+
+    var at = Date.parse(iso.replace(/\.(\d{3})\d+Z$/, ".$1Z"));
+    if (isNaN(at)) return iso;
+
+    var d = new Date(at);
+
+    if (utc) {
+      return d.getUTCFullYear() + "-" + two(d.getUTCMonth() + 1) + "-" + two(d.getUTCDate()) +
+        " " + two(d.getUTCHours()) + ":" + two(d.getUTCMinutes()) + ":" + two(d.getUTCSeconds()) + " UTC";
+    }
+
+    var offset = -d.getTimezoneOffset();
+    var sign = offset < 0 ? "-" : "+";
+    var abs = Math.abs(offset);
+
+    return d.getFullYear() + "-" + two(d.getMonth() + 1) + "-" + two(d.getDate()) +
+      " " + two(d.getHours()) + ":" + two(d.getMinutes()) + ":" + two(d.getSeconds()) +
+      " UTC" + sign + two(Math.floor(abs / 60)) + ":" + two(abs % 60);
+  }
+
+  function spell(ms) {
+    if (ms < 1000) return ms + "ms";
+    if (ms < 60000) return (ms / 1000).toFixed(1) + "s";
+    if (ms < 3600000) return Math.floor(ms / 60000) + "m " + Math.round((ms % 60000) / 1000) + "s";
+    return Math.floor(ms / 3600000) + "h " + Math.round((ms % 3600000) / 60000) + "m";
+  }
+
+  // ===== A row =====
+
+  function matches(entry) {
+    if (!needle) return true;
+
+    var hay = (entry.message + " " + (entry.error || "") + " " + (entry.stackTrace || "") + " " +
+      (entry.extra ? JSON.stringify(entry.extra) : "")).toLowerCase();
+
+    return hay.indexOf(needle) !== -1;
+  }
+
+  function detail(entry) {
+    var box = make("div", "detail");
+
+    if (entry.extra) {
+      box.appendChild(make("span", "detail__label", "extra"));
+      var tree = make("div", "json");
+      tree.appendChild(node(entry.extra, needle, 0, null));
+      box.appendChild(tree);
+    }
+
+    if (entry.error) {
+      box.appendChild(make("span", "detail__label", "error"));
+      var err = make("div", "detail__error");
+      write(err, entry.error, needle);
+      box.appendChild(err);
+    }
+
+    if (entry.stackTrace) {
+      box.appendChild(make("span", "detail__label", "stack"));
+      var stack = make("div", "detail__stack");
+      write(stack, entry.stackTrace, needle);
+      box.appendChild(stack);
+    }
+
+    return box;
+  }
+
+  function row(entry) {
+    var line = make("div", "row row--" + (LEVELS.indexOf(entry.level) === -1 ? "debug" : entry.level));
+    line.setAttribute("data-index", String(entry.index));
+
+    line.appendChild(make("span", "row__time", clock(entry)));
+    line.appendChild(make("span", "row__level", entry.level));
+
+    var body = make("span", "row__body");
+    write(body, entry.message, needle);
+
+    var has = entry.extra || entry.error || entry.stackTrace;
+
+    if (has) {
+      // Collapsed by default, which is how a log is read: down the
+      // messages first, into one of them second. It also keeps a
+      // collapsed row a fixed height, which is what makes appending
+      // thousands of them cheap.
+      var toggle = make("span", "row__more", "  ▸ " + [
+        entry.extra ? "extra" : null,
+        entry.error ? "error" : null,
+        entry.stackTrace ? "stack" : null
+      ].filter(Boolean).join(" · "));
+
+      body.appendChild(toggle);
+
+      var open = false;
+      var panel = null;
+
+      toggle.addEventListener("click", function () {
+        open = !open;
+
+        if (open) {
+          panel = detail(entry);
+          body.appendChild(panel);
+          toggle.textContent = "  ▾";
+        } else {
+          if (panel) body.removeChild(panel);
+          panel = null;
+          toggle.textContent = "  ▸ " + [
+            entry.extra ? "extra" : null,
+            entry.error ? "error" : null,
+            entry.stackTrace ? "stack" : null
+          ].filter(Boolean).join(" · ");
+        }
+      });
+    }
+
+    line.appendChild(body);
+
+    return line;
+  }
+
+  // ===== Filling the log =====
+
+  function more(count) {
+    var upto = Math.min(shown.length, drawn + count);
+    var fragment = document.createDocumentFragment();
+
+    for (var i = drawn; i < upto; i++) {
+      var entry = shown[i];
+      var before = i > 0 ? shown[i - 1] : null;
+
+      if (before && before.at !== null && entry.at !== null && entry.at - before.at >= GAP) {
+        fragment.appendChild(make("div", "gap", spell(entry.at - before.at) + " with nothing logged"));
+      }
+
+      fragment.appendChild(row(entry));
+    }
+
+    el.log.appendChild(fragment);
+    drawn = upto;
+  }
+
+  function paint() {
+    clear(el.log);
+    drawn = 0;
+
+    shown = bundle.entries.filter(function (entry) {
+      return !muted[entry.level] && matches(entry);
+    });
+
+    // The cut goes at the top because the top is where the loss is. A
+    // limit takes the beginning of a session, not the end.
+    if (bundle.report.truncated) {
+      el.log.appendChild(make("div", "cut",
+        "⌃ the beginning of this session was cut to fit a limit — the log starts mid-session"));
+    }
+
+    if (!shown.length) {
+      el.log.appendChild(make("p", "empty", bundle.entries.length ? "Nothing matches that." : "This report was filed before anything was logged."));
+    } else {
+      more(CHUNK);
+    }
+
+    el.meta.textContent = shown.length === bundle.entries.length
+      ? name + " · " + shown.length + " lines"
+      : name + " · " + shown.length + " of " + bundle.entries.length;
+
+    strip();
+    remember();
+  }
+
+  // ===== The density strip =====
+
+  function hue(level) {
+    var style = getComputedStyle(document.documentElement);
+    return style.getPropertyValue("--" + level).trim() || "#888";
+  }
+
+  var colours = null;
+
+  function strip() {
+    var canvas = el.canvas;
+    var box = el.strip.getBoundingClientRect();
+    var ratio = window.devicePixelRatio || 1;
+
+    canvas.width = Math.max(1, Math.floor(box.width * ratio));
+    canvas.height = Math.max(1, Math.floor(box.height * ratio));
+
+    var ctx = canvas.getContext("2d");
+    ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
+    ctx.clearRect(0, 0, box.width, box.height);
+
+    if (!colours) {
+      colours = {};
+      LEVELS.forEach(function (level) { colours[level] = hue(level); });
+    }
+
+    var timed = shown.filter(function (e) { return typeof e.at === "number"; });
+    if (timed.length < 1) return;
+
+    var first = timed[0].at;
+    var last = timed[timed.length - 1].at;
+    var span = last - first;
+
+    var w = box.width;
+    var h = box.height;
+    var pad = 6;
+
+    // Placed by time, not by position in the list. A session that went
+    // quiet for half a minute has to leave a hole here — that hole is
+    // the single most useful thing on the page.
+    function xOf(at) {
+      return span === 0 ? w / 2 : pad + ((at - first) / span) * (w - pad * 2);
+    }
+
+    var tall = { debug: .34, info: .5, warning: .72, error: 1 };
+
+    // Errors last, so a burst of them is never hidden under the polling
+    // that surrounds it.
+    LEVELS.forEach(function (level) {
+      ctx.fillStyle = colours[level];
+      ctx.globalAlpha = level === "debug" ? .55 : .85;
+
+      timed.forEach(function (entry) {
+        if (entry.level !== level) return;
+
+        var height = (tall[level] || .5) * (h - 12);
+        ctx.fillRect(Math.round(xOf(entry.at)), h - 6 - height, 2, height);
+      });
+    });
+
+    ctx.globalAlpha = 1;
+
+    el.strip.__map = { first: first, span: span, w: w, pad: pad, timed: timed };
+    marker();
+  }
+
+  // Which slice of the session is on screen.
+  function marker() {
+    var map = el.strip.__map;
+    var old = el.strip.querySelector(".strip__span");
+    if (old) el.strip.removeChild(old);
+
+    if (!map || !map.timed.length) return;
+
+    var rows = el.log.querySelectorAll(".row");
+    if (!rows.length) return;
+
+    var top = el.log.scrollTop;
+    var bottom = top + el.log.clientHeight;
+    var lo = null;
+    var hi = null;
+
+    for (var i = 0; i < rows.length; i++) {
+      var y = rows[i].offsetTop;
+      if (y + rows[i].offsetHeight >= top && y <= bottom) {
+        var at = bundle.entries[Number(rows[i].getAttribute("data-index"))].at;
+        if (typeof at === "number") {
+          if (lo === null) lo = at;
+          hi = at;
+        }
+      }
+    }
+
+    if (lo === null) return;
+
+    var xa = map.span === 0 ? map.pad : map.pad + ((lo - map.first) / map.span) * (map.w - map.pad * 2);
+    var xb = map.span === 0 ? map.w - map.pad : map.pad + ((hi - map.first) / map.span) * (map.w - map.pad * 2);
+
+    var band = make("div", "strip__span");
+    band.style.left = Math.max(0, xa - 1) + "px";
+    band.style.width = Math.max(2, xb - xa + 2) + "px";
+    el.strip.appendChild(band);
+  }
+
+  // ===== Going somewhere =====
+
+  function reveal(index) {
+    var place = shown.findIndex(function (entry) { return entry.index === index; });
+    if (place === -1) return;
+
+    while (drawn <= place) more(CHUNK);
+
+    var target = el.log.querySelector('.row[data-index="' + index + '"]');
+    if (!target) return;
+
+    var was = el.log.querySelector(".row.is-here");
+    if (was) was.classList.remove("is-here");
+
+    target.classList.add("is-here");
+    el.log.scrollTop = target.offsetTop - el.log.clientHeight / 3;
+    here = index;
+    marker();
+  }
+
+  // The reason somebody opened the file. One key, both directions.
+  function jump(step) {
+    var errors = shown.filter(function (entry) { return entry.level === "error"; });
+    if (!errors.length) return;
+
+    var at = errors.findIndex(function (entry) { return entry.index === here; });
+    var next = at === -1
+      ? (step > 0 ? 0 : errors.length - 1)
+      : (at + step + errors.length) % errors.length;
+
+    reveal(errors[next].index);
+  }
+
+  // ===== The panel =====
+
+  function facts(rows) {
+    var table = make("table", "facts");
+
+    rows.forEach(function (pair) {
+      if (pair[1] === null || pair[1] === undefined || pair[1] === "") return;
+
+      var tr = make("tr");
+      tr.appendChild(make("td", null, pair[0]));
+      tr.appendChild(make("td", null, String(pair[1])));
+      table.appendChild(tr);
+    });
+
+    return table;
+  }
+
+  function panel() {
+    clear(el.side);
+
+    var report = bundle.report;
+
+    if (report.description) {
+      el.side.appendChild(make("p", "side__desc", report.description));
+    }
+
+    el.side.appendChild(make("h2", null, "report"));
+    el.side.appendChild(facts([
+      ["filed", stamp(report.generatedAt)],
+      ["entries", bundle.entries.length],
+      ["truncated", report.truncated ? "yes — the start is missing" : "no"],
+      ["read from", bundle.exact ? bundle.source + " (exact)" : bundle.source + " (inferred)"]
+    ]));
+
+    var hidden = countRedactions(bundle.entries);
+    if (hidden) {
+      el.side.appendChild(make("h2", null, "redaction"));
+      el.side.appendChild(facts([
+        ["values hidden", hidden + " — the redactor ran before this was written"]
+      ]));
+    }
+
+    if (report.metadata) {
+      el.side.appendChild(make("h2", null, "metadata"));
+      el.side.appendChild(facts(Object.keys(report.metadata).map(function (k) {
+        return [k, report.metadata[k]];
+      })));
+    }
+
+    if (bundle.screenshot) {
+      el.side.appendChild(make("h2", null, "screenshot"));
+
+      if (shotUrl) URL.revokeObjectURL(shotUrl);
+      shotUrl = URL.createObjectURL(new Blob([bundle.screenshot], { type: "image/png" }));
+
+      var img = make("img", "shot");
+      img.src = shotUrl;
+      img.alt = "The screen as the reporter saw it";
+      img.addEventListener("click", function () { lightbox(shotUrl); });
+      el.side.appendChild(img);
+    }
+
+    var keys = make("div", "keys");
+    [["n / p", "next / previous error"], ["/", "search"], ["u", "local or UTC"], ["esc", "clear"]]
+      .forEach(function (pair) {
+        var line = make("div");
+        line.appendChild(make("b", null, pair[0] + "  "));
+        line.appendChild(document.createTextNode(pair[1]));
+        keys.appendChild(line);
+      });
+    el.side.appendChild(keys);
+  }
+
+  function lightbox(url) {
+    var box = make("div", "lightbox");
+    var img = make("img");
+    img.src = url;
+    box.appendChild(img);
+    box.addEventListener("click", function () { document.body.removeChild(box); });
+    document.body.appendChild(box);
+  }
+
+  // ===== Banners =====
+
+  function banners() {
+    clear(el.banners);
+
+    bundle.notices.forEach(function (notice) {
+      var line = make("div", "banner banner--" + notice.kind);
+      line.appendChild(make("span", "banner__mark", notice.kind === "warn" ? "!" : "i"));
+      line.appendChild(make("span", null, notice.text));
+      el.banners.appendChild(line);
+    });
+  }
+
+  // ===== Chips =====
+
+  function chips() {
+    clear(el.chips);
+
+    var counts = {};
+    bundle.entries.forEach(function (entry) {
+      counts[entry.level] = (counts[entry.level] || 0) + 1;
+    });
+
+    Object.keys(counts).sort(function (a, b) {
+      return LEVELS.indexOf(a) - LEVELS.indexOf(b);
+    }).forEach(function (level) {
+      var chip = make("button", "chip chip--" + level + (muted[level] ? "" : " is-on"), level + " " + counts[level]);
+      chip.type = "button";
+      chip.addEventListener("click", function () {
+        muted[level] = !muted[level];
+        chip.classList.toggle("is-on", !muted[level]);
+        paint();
+      });
+      el.chips.appendChild(chip);
+    });
+  }
+
+  // ===== The URL =====
+
+  // Only how the log is being looked at. Never any of the log: a URL
+  // ends up in browser history, in a chat message, in whatever the
+  // person pastes it into, and none of those are places a customer's
+  // data should go.
+  function remember() {
+    var query = [];
+    if (needle) query.push("q=" + encodeURIComponent(needle));
+
+    var off = LEVELS.filter(function (level) { return muted[level]; });
+    if (off.length) query.push("hide=" + off.join(","));
+    if (utc) query.push("utc=1");
+
+    history.replaceState(null, "", query.length ? "?" + query.join("&") : location.pathname);
+  }
+
+  function recall() {
+    var query = new URLSearchParams(location.search);
+
+    needle = (query.get("q") || "").trim().toLowerCase();
+    el.search.value = query.get("q") || "";
+    utc = query.get("utc") === "1";
+    el.zone.classList.toggle("is-on", utc);
+    el.zone.textContent = utc ? "UTC" : "local";
+
+    (query.get("hide") || "").split(",").forEach(function (level) {
+      if (level) muted[level] = true;
+    });
+  }
+
+  // ===== Opening =====
+
+  function complain(message) {
+    el.fail.textContent = message;
+    el.fail.classList.remove("is-hidden");
+  }
+
+  function show(next, label) {
+    bundle = next;
+    name = label;
+    here = -1;
+
+    el.fail.classList.add("is-hidden");
+    el.drop.classList.add("is-hidden");
+    el.view.classList.remove("is-hidden");
+
+    banners();
+    chips();
+    panel();
+    paint();
+
+    el.log.scrollTop = 0;
+    el.log.focus();
+  }
+
+  function read(file) {
+    return file.arrayBuffer().then(function (buffer) {
+      return { name: file.name, bytes: new Uint8Array(buffer) };
+    });
+  }
+
+  function take(files) {
+    var list = Array.prototype.slice.call(files);
+    if (!list.length) return;
+
+    el.fail.classList.add("is-hidden");
+
+    Promise.all(list.map(read))
+      .then(function (parts) { return window.FBR.parse.open(parts); })
+      .then(function (next) {
+        show(next, list.length === 1 ? list[0].name : list.length + " files");
+      })
+      .catch(function (error) { complain(error.message || String(error)); });
+  }
+
+  function shut() {
+    bundle = null;
+    shown = [];
+    drawn = 0;
+    muted = {};
+    needle = "";
+    here = -1;
+
+    if (shotUrl) { URL.revokeObjectURL(shotUrl); shotUrl = null; }
+
+    el.search.value = "";
+    el.picker.value = "";
+    clear(el.log);
+    clear(el.side);
+    clear(el.banners);
+    clear(el.chips);
+
+    el.view.classList.add("is-hidden");
+    el.drop.classList.remove("is-hidden");
+    history.replaceState(null, "", location.pathname);
+  }
+
+  // ===== Wiring =====
+
+  el.picker.addEventListener("change", function () { take(el.picker.files); });
+
+  ["dragenter", "dragover"].forEach(function (kind) {
+    document.addEventListener(kind, function (event) {
+      event.preventDefault();
+      el.drop.classList.add("is-over");
+    });
+  });
+
+  ["dragleave", "drop"].forEach(function (kind) {
+    document.addEventListener(kind, function (event) {
+      event.preventDefault();
+      el.drop.classList.remove("is-over");
+    });
+  });
+
+  document.addEventListener("drop", function (event) {
+    if (event.dataTransfer && event.dataTransfer.files.length) take(event.dataTransfer.files);
+  });
+
+  // A log is in a clipboard about as often as it is in a file — pasted
+  // out of a terminal, or out of an attachment preview.
+  document.addEventListener("paste", function (event) {
+    if (event.target === el.search) return;
+
+    var text = event.clipboardData && event.clipboardData.getData("text");
+    if (!text || !text.trim()) return;
+
+    window.FBR.parse.openText(text)
+      .then(function (next) { show(next, "pasted"); })
+      .catch(function (error) { complain(error.message || String(error)); });
+  });
+
+  var typing = null;
+  el.search.addEventListener("input", function () {
+    clearTimeout(typing);
+    typing = setTimeout(function () {
+      needle = el.search.value.trim().toLowerCase();
+      if (bundle) paint();
+    }, 120);
+  });
+
+  el.log.addEventListener("scroll", function () {
+    if (drawn < shown.length && el.log.scrollTop + el.log.clientHeight > el.log.scrollHeight - 600) {
+      more(CHUNK);
+    }
+    marker();
+  });
+
+  el.strip.addEventListener("click", function (event) {
+    var map = el.strip.__map;
+    if (!map || !map.timed.length) return;
+
+    var box = el.strip.getBoundingClientRect();
+    var want = map.first + ((event.clientX - box.left - map.pad) / (map.w - map.pad * 2)) * map.span;
+
+    var best = map.timed[0];
+    map.timed.forEach(function (entry) {
+      if (Math.abs(entry.at - want) < Math.abs(best.at - want)) best = entry;
+    });
+
+    reveal(best.index);
+  });
+
+  el.zone.addEventListener("click", function () {
+    utc = !utc;
+    el.zone.classList.toggle("is-on", utc);
+    el.zone.textContent = utc ? "UTC" : "local";
+    if (bundle) { panel(); paint(); }
+  });
+
+  el.close.addEventListener("click", shut);
+
+  el.copy.addEventListener("click", function () {
+    var text = shown.map(function (entry) {
+      var head = (entry.time || "") + " " + entry.level.toUpperCase() + " " + entry.message;
+      if (entry.extra) head += "\n  " + JSON.stringify(entry.extra);
+      if (entry.error) head += "\n  " + entry.error;
+      if (entry.stackTrace) head += "\n  " + entry.stackTrace.split("\n").join("\n  ");
+      return head;
+    }).join("\n");
+
+    navigator.clipboard.writeText(text).then(function () {
+      el.copy.textContent = "Copied";
+      setTimeout(function () { el.copy.textContent = "Copy"; }, 1200);
+    }, function () {
+      el.copy.textContent = "Cannot";
+      setTimeout(function () { el.copy.textContent = "Copy"; }, 1200);
+    });
+  });
+
+  document.addEventListener("keydown", function (event) {
+    if (event.metaKey || event.ctrlKey || event.altKey) return;
+
+    if (event.target === el.search) {
+      if (event.key === "Escape") {
+        el.search.value = "";
+        needle = "";
+        if (bundle) paint();
+        el.log.focus();
+      }
+      return;
+    }
+
+    if (!bundle) return;
+
+    if (event.key === "/") { event.preventDefault(); el.search.focus(); return; }
+    if (event.key === "n" || event.key === "j") { event.preventDefault(); jump(1); return; }
+    if (event.key === "p" || event.key === "k") { event.preventDefault(); jump(-1); return; }
+    if (event.key === "u") { el.zone.click(); return; }
+    if (event.key === "Escape") { shut(); }
+  });
+
+  var resizing = null;
+  window.addEventListener("resize", function () {
+    clearTimeout(resizing);
+    resizing = setTimeout(function () { if (bundle) strip(); }, 120);
+  });
+
+  recall();
+})();
+</script>
+</body>
+</html>

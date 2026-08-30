@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+<!--
+  connect-src 'none' is the load-bearing line in this file.
+
+  The promise this page makes is that a bug report dropped into it does
+  not go anywhere. A promise is worth what the person making it is
+  worth; this is the browser refusing to carry out a fetch, an XHR, a
+  WebSocket or a beacon no matter what the script asks for. A page that
+  cannot make a request cannot leak a log.
+
+  Everything else here follows from the same idea: no CDN, no fonts to
+  fetch, no analytics, nothing loaded from anywhere but this directory.
+-->
+<meta http-equiv="Content-Security-Policy" content="
+  default-src 'none';
+  script-src 'self';
+  style-src 'self';
+  img-src 'self' blob: data:;
+  connect-src 'none';
+  base-uri 'none';
+  form-action 'none'
+" />
+<!-- frame-ancestors is deliberately absent: a browser ignores it in a meta
+     tag and logs an error for it, and an error nobody can fix is an error
+     people learn to scroll past. It belongs in a response header, which is
+     GitHub Pages' business, not this file's. -->
+
+<title>Bug report viewer · flutter_bug_report</title>
+<meta name="description" content="Open a flutter_bug_report bundle — .zip, .json or .txt — and read it. Runs entirely in your browser; nothing is uploaded." />
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+<header class="top">
+  <div class="brand">flutter_bug_report <span>· viewer</span></div>
+  <div class="vow">
+    <span class="vow__dot" aria-hidden="true"></span>
+    <span>Nothing leaves your machine —</span>
+    <code>connect-src 'none'</code>
+  </div>
+</header>
+
+<main>
+  <!-- ===== Nothing open ===== -->
+  <section class="drop" id="drop">
+    <div class="drop__box">
+      <p class="drop__title">Drop a bundle — <code>.zip</code>, <code>.json</code> or <code>.txt</code></p>
+      <p class="drop__note">Or paste the log. Or pick the file.</p>
+      <label class="drop__pick">
+        Choose a file
+        <input id="picker" type="file" multiple accept=".zip,.json,.txt,.log,.png" hidden />
+      </label>
+    </div>
+
+    <p class="fail is-hidden" id="fail"></p>
+
+    <div class="about">
+      <p>
+        A bundle is what <a href="https://pub.dev/packages/flutter_bug_report" rel="noopener">flutter_bug_report</a>
+        attaches to a bug report: the app's log, redacted and bounded, with the
+        report's own description and a screenshot beside it.
+      </p>
+      <p>
+        It is read here in the page and never uploaded — there is no server to
+        upload it to. The bundle was redacted on the device before it was
+        written, but it still carries real data, and a
+        <code>screenshot.png</code> cannot be redacted at all. Save this page and
+        it works with no network at all.
+      </p>
+    </div>
+  </section>
+
+  <!-- ===== A bundle, open ===== -->
+  <section class="view is-hidden" id="view">
+    <div class="strip" id="strip" title="The session over time. Click to jump.">
+      <canvas id="canvas"></canvas>
+    </div>
+
+    <div class="bar">
+      <input id="search" class="search" type="search" placeholder="Filter lines…" autocomplete="off" spellcheck="false" />
+      <div class="chips" id="chips"></div>
+      <div class="bar__end">
+        <span class="bar__meta" id="meta"></span>
+        <button class="btn" id="zone" type="button" title="Show times in UTC instead of local">UTC</button>
+        <button class="btn" id="copy" type="button">Copy</button>
+        <button class="btn" id="close" type="button">Close</button>
+      </div>
+    </div>
+
+    <div class="banners" id="banners"></div>
+
+    <div class="split">
+      <div class="log" id="log" tabindex="0"></div>
+      <aside class="side" id="side"></aside>
+    </div>
+  </section>
+</main>
+
+<script src="unzip.js"></script>
+<script src="parse.js"></script>
+<script src="viewer.js"></script>
+</body>
+</html>
