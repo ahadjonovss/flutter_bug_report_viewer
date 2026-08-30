@@ -1,3 +1,5 @@
+<img src="brand/logo-light.svg" width="56" height="56" alt="" align="left" hspace="12" />
+
 # flutter_bug_report — log viewer
 
 A bug report from [`flutter_bug_report`](https://pub.dev/packages/flutter_bug_report)

@@ -59,6 +59,9 @@ body {
 }
 
 .brand {
+  display: flex;
+  align-items: center;
+  gap: 9px;
   font-family: var(--mono);
   font-size: 13px;
   font-weight: 600;
@@ -68,7 +71,20 @@ body {
   transition: color var(--t);
 }
 .brand:hover { color: var(--accent); }
-.brand span { color: var(--dim); font-weight: 400; }
+.brand__sub { color: var(--dim); font-weight: 400; }
+
+/* The mark is the same figure the hero draws and the same one the strip
+   draws from real data: quiet, a gap, a burst. Inline rather than an
+   <img>, so it costs no request, cannot be blocked, and takes its colours
+   from the palette the rest of the page uses. */
+.mark {
+  width: 19px;
+  height: 19px;
+  flex: none;
+  display: block;
+}
+.mark__quiet { fill: var(--info); }
+.mark__burst { fill: var(--error); }
 
 /* The claim the whole project rests on, stated where it cannot be
    missed rather than in a footer. */
