@@ -171,18 +171,42 @@ Etalon bundle'lar paketning **o'z builder'i** yozgan, qo'lda emas.
 `test/fixtures/` ga nusxa ko'chiriladi, manba pinlangan commit:
 
 ```
-https://raw.githubusercontent.com/ahadjonovss/flutter_bug_report/d8db3cd/test/fixtures/<name>
+fixtures/         d8db3cd   (0.3.1)
+fixtures/legacy/  2139d41   (v0.3.0 worktree'sida yuritilgan)
 ```
 
 Tag'ga emas, commit'ga pinlanadi: `timeline` fikstura `v0.3.1` dan keyin
 qo'shilgan va u uchun alohida reliz kesilmagan. Pindan farq chiqsa — format
 o'zgargan; pinni ko'tarish ko'rib chiqiladigan alohida qaror.
 
+**Eski format bo'yicha ish tugagan, vaqtinchalik emas.** 0.3.0 va 0.3.1
+chiqargan fayllar solishtirildi: **atigi uchta fayl farq qiladi** —
+`legacy/multiline_description.txt` (otstupsiz o'ralgan description) va
+`legacy/screenshot.{txt,json}` (mavjud bo'lmagan skrinshot da'vosi).
+Qolgan hammasi bayt-baytga bir xil, ziplar esa mazmunan.
+
+Ya'ni eski bundle boshqacha bo'lishining **faqat ikkita yo'li bor**, va
+ikkalasi ham qamrab olingan. Tiketda kutib turgan uchinchi "eski format
+g'alatiligi" yo'q. 0.1.0–0.3.0 nashr qilingan va qaytarib olinmaydi —
+bu shakllar abadiy o'qilishi kerak.
+
 Testlar: `node test/run.js` va `test.html` (ikkalasi ham `test/cases.js` ni
 yuritadi). **Zip baytlari takrorlanmaydi** — arxiv modifikatsiya vaqtini
 yozadi — shuning uchun zip *mazmuni* solishtiriladi, baytlari emas.
 
-### 5.8 Brauzer talabi
+### 5.8 `entry_count` faqat o'z formatiga tegishli
+
+`truncated` fikstura buni ko'rsatadi: bir xil kirishdan **txt 5 ta yozuv,
+json esa 2 ta** saqlagan. Sabab — `_fit` chegaraga sig'ishni maqsad formatda
+render qilib o'lchaydi va sig'maguncha ikkiga bo'ladi; json'ning har yozuvga
+tushadigan ortiqcha hajmi txt saqlab qoladigan yozuvlarni yeb qo'yadi.
+
+Demak: **bir formatning `entry_count` i boshqasi haqida hech narsa aytmaydi.**
+Ikkala qiymat ham to'g'ri. Ziplarda `report.json` va `logs.txt` bir xil
+`kept` ro'yxatidan yozilgani uchun ular o'zaro mos — lekin alohida qurilgan
+`.json` va `.txt` bundle'lar mos kelmasligi mumkin va bu buzilganlik emas.
+
+### 5.9 Brauzer talabi
 
 `DecompressionStream('deflate-raw')` — Chrome 103+, Safari 16.4+, Firefox 113+.
 Undan eskisida zip ochilmaydi va sayt buni aniq aytadi (`.json` yoki `.txt`

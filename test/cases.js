@@ -201,7 +201,11 @@
     }
 
     // Everything under test, read once.
-    var names = [];
+    var names = [
+      "legacy/multiline_description.txt",
+      "legacy/screenshot.txt",
+      "legacy/screenshot.json"
+    ];
     CASES.forEach(function (name) {
       names.push(name + ".txt", name + ".json", name + ".zip");
     });
@@ -393,29 +397,36 @@
         // ===== Bundles from before 0.3.1, which never stop existing =====
         t.suite("older bundles");
 
-        // 0.1.0 through 0.3.0 wrote a wrapped description unindented, so
-        // its continuation sat at column zero looking like anything at all.
-        var old = P.parseText([
-          "=== flutter_bug_report ===",
-          "generated_at: 2026-08-26T07:19:11.214967Z",
-          "description: I pressed refresh",
-          "and then pay: twice",
-          "entry_count: 1",
-          "truncated: false",
-          "==================",
-          "",
-          "2026-08-26T07:19:11.214967Z INFO    signed in"
-        ].join("\n"));
+        // These are not an approximation of the old format. They came
+        // out of the builder at tag v0.3.0, which is the only thing that
+        // can say what the old format was.
+        //
+        // Exactly three files differ between v0.3.0 and v0.3.1 and these
+        // are all of them; everything else the two versions write is
+        // byte-identical. So the two shapes handled here are not the ones
+        // that happened to be thought of — they are the complete set.
+        var old = P.parseText(new TextDecoder().decode(loaded["legacy/multiline_description.txt"]));
 
-        t.eq(old.report.description, "I pressed refresh\nand then pay: twice",
-          "an unwrapped description is put back together, colon and all");
+        t.eq(old.report.description, "I pressed refresh\nand then pay\nand the list was still empty",
+          "a v0.3.0 description wrapped without indentation is put back together");
         t.eq(old.report.entryCount, 1, "and the field after it is still read");
+        t.eq(old.report.truncated, false, "and the one after that");
+        t.deep(old.report.metadata,
+          { app_version: "1.0.17+2185", platform: "android", os_version: "Android 14" },
+          "and the metadata block below it is untouched");
         t.eq(old.entries.length, 1, "and so are the entries");
 
-        // The nastier shape of the same thing: a continuation line that
-        // is a single word and a colon, which is exactly what a header
-        // field looks like. Only a description may swallow one — any
-        // other field would be shadowing a format change.
+        // The same case as 0.3.1 writes it. Two renderings of one report,
+        // and the reader must not be able to tell which they were sent.
+        var now = P.parseText(new TextDecoder().decode(loaded["multiline_description.txt"]));
+        t.eq(old.report.description, now.report.description,
+          "0.3.0 and 0.3.1 wrapping read back identically");
+        t.deep(shape(old), shape(now), "with the same entries under them");
+
+        // The harder shape, which no fixture has because the builder
+        // could not produce it: a continuation line that is a single word
+        // and a colon, indistinguishable from a header field. Only a
+        // description may swallow one.
         var shadow = P.parseText([
           "=== flutter_bug_report ===",
           "generated_at: 2026-08-26T07:19:11.214967Z",
@@ -430,24 +441,36 @@
         t.eq(shadow.report.description, "I pressed pay\nthen: nothing happened at all",
           "a continuation that reads exactly like a field stays in the description");
         t.eq(shadow.report.entryCount, 0, "and the real field after it is still read");
-        t.eq(shadow.report.truncated, false, "and so is the one after that");
 
-        // Those versions also named a screenshot in text and json, where
-        // one can never be.
-        var claimed = P.parseJson(JSON.stringify({
-          report: { generated_at: "2026-08-26T07:19:11.214967Z", entry_count: 0, truncated: false, screenshot: "screenshot.png" },
-          entries: []
-        }));
+        // v0.3.0 named a screenshot in text and json, where one can never
+        // be. Both forms of the claim, from the builder that made it.
+        var claimedText = P.parseText(new TextDecoder().decode(loaded["legacy/screenshot.txt"]));
+        var claimedJson = P.parseJson(new TextDecoder().decode(loaded["legacy/screenshot.json"]));
 
-        t.eq(claimed.report.screenshot, "screenshot.png", "the old false claim is read");
+        t.eq(claimedText.report.screenshot, "screenshot.png", "a v0.3.0 text bundle claims a screenshot");
+        t.eq(claimedJson.report.screenshot, "screenshot.png", "and so does its json");
+        t.eq(claimedText.report.description, "the button is off the screen",
+          "and the field written after the claim is still read");
 
-        return P.open([file("report.json", JSON.stringify({
-          report: { generated_at: "2026-08-26T07:19:11.214967Z", entry_count: 0, truncated: false, screenshot: "screenshot.png" },
-          entries: []
-        }))]).then(function (bundle) {
+        return P.open([{ name: "screenshot.json", bytes: loaded["legacy/screenshot.json"] }]).then(function (bundle) {
+          t.eq(bundle.screenshot, null, "nothing is found to go with the claim");
           t.ok(bundle.notices.some(function (n) {
             return n.text.indexOf("Ask for the .zip") !== -1;
-          }), "and the reader is told to ask for the zip rather than left wondering");
+          }), "so the reader is told to ask for the zip rather than left hunting");
+
+          return P.open([{ name: "logs.txt", bytes: loaded["legacy/screenshot.txt"] }]);
+        }).then(function (bundle) {
+          t.ok(bundle.notices.some(function (n) {
+            return n.text.indexOf("Ask for the .zip") !== -1;
+          }), "and the same for the text form of the claim");
+
+          // 0.3.1 makes no such claim, so there must be nothing to say.
+          return P.open([{ name: "screenshot.txt", bytes: loaded["screenshot.txt"] }]);
+        }).then(function (bundle) {
+          t.eq(bundle.report.screenshot, null, "0.3.1 text claims no screenshot");
+          t.eq(bundle.notices.filter(function (n) {
+            return n.text.indexOf("Ask for the .zip") !== -1;
+          }).length, 0, "and is not warned about one");
         });
       })
       .then(function () {
